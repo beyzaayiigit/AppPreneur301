@@ -1,6 +1,6 @@
 # 📄 MVP KAPSAM DOKÜMANI (Product Scope Document)
 
-**Ürün Adı:** [Geçici: PureGrain]  
+**Ürün Adı:** [Geçici: Lumeris]  
 **Versiyon:** 1.0 (MVP)  
 **Hedef Kitle:** 18-25 yaş, estetik odaklı, abonelik yorgunu mobil fotoğrafçılar.  
 **Temel Motto:** "Kayıt yok, reklam yok, sadece saf analog."
