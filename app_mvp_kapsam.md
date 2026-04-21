@@ -18,10 +18,10 @@ Piyasadaki karmaşık, abonelik odaklı ve kullanıcıyı kayıt olmaya zorlayan
 ## 3. MVP ÖZELLİK SETİ (Must-to-Have)
 
 ### A. Giriş ve Dosya Yönetimi
-* **Estetik Karşılama:** Splash screen sonrası minimal ve görsel olarak güçlü bir karşılama ekranı gösterilir. Bu ekranda:
-Galeriden seçilmiş küçük önizleme görselleri (thumbnail strip)
-Tek bir ana aksiyon: “Düzenlemeye Başla”
-bulunur. Kullanıcı tek dokunuşla editöre veya galeriye geçer.
+* **Estetik Karşılama:** Splash screen sonrası minimal ve görsel olarak güçlü bir karşılama ekranı gösterilir. 
+    Bu ekranda:
+    *   Galeriden seçilmiş küçük önizleme görselleri (thumbnail strip)
+    *   Tek bir ana aksiyon: “Düzenlemeye Başla” bulunur. Kullanıcı tek dokunuşla editöre veya galeriye geçer.
 * **No-Login:** Kullanıcı hesabı, e-posta veya şifre zorunluluğu yok.
 
 ### B. Düzenleme Motoru (GPU Tabanlı)
