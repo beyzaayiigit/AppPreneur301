@@ -7,16 +7,15 @@
 ---
 
 ## 1. Ürün Vizyonu ve Hedefler
-PureGrain, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. Kullanıcıyı hesap açma veya ödeme duvarlarıyla yormadan, profesyonel kalitede analog dokusunu ve HSL kontrolünü cihaz üzerinde (on-device) sunar.
+Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. Kullanıcıyı hesap açma veya ödeme duvarlarıyla yormadan, profesyonel kalitede analog dokusunu ve HSL kontrolünü cihaz üzerinde (on-device) sunar.
 
 * **Stratejik Hedef:** 18-25 yaş arası görsel estetik odaklı kitlenin "go-to" hızlı düzenleme aracı olmak.
-* **Değer Önerisi:** Sıfır kayıt, maksimum hız, yüksek kaliteli grain ve renk kontrolü.
-
+* **Değer Önerisi:** Sıfır kayıt, maksimum hız, güçlü hazır analog filtreler ve bunları destekleyen esnek manuel ayar kontrolleri ile hızlı ama derinlemesine fotoğraf düzenleme deneyimi.
 ---
 
 ## 2. Kullanıcı Hikayeleri (User Stories)
-* **Giriş:** Bir kullanıcı olarak, uygulamayı açtığımda hiçbir form doldurmadan doğrudan galerimi görüp düzenlemeye başlamak istiyorum.
-* **Düzenleme:** Bir mobil fotoğrafçı olarak, GPU gücünü kullanan akıcı bir arayüzle fotoğrafıma gerçekçi film kumlanması (grain) ve renk tonu (HSL) ayarı yapmak istiyorum.
+* **Giriş:** Bir kullanıcı olarak, uygulamayı açtığımda estetik bir karşılama ekranı görmek, buradan tek dokunuşla galerime veya düzenleme akışına geçmek istiyorum.
+* **Düzenleme:** Bir mobil fotoğrafçı olarak,GPU gücünü kullanan akıcı bir arayüzle ve tek dokunuşla güçlü sonuç veren hazır analog filtreler kullanmak, dilersem de fotoğraflarımı manuel ayarlarla (ışık, renk, HSL vb.) detaylı şekilde özelleştirmek istiyorum.
 * **Gizlilik:** Verilerine hassas bir birey olarak, fotoğraflarımın hiçbir sunucuya yüklenmediğinden emin olmak istiyorum.
 
 ---
@@ -24,17 +23,17 @@ PureGrain, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler
 ## 3. Fonksiyonel Gereksinimler (Functional Requirements)
 
 ### 3.1. Medya Erişimi ve Galeri Yönetimi
-* **FR1:** Uygulama açılışında sistem galerisine erişim izni istenecek. İzin verildikten sonra fotoğraflar "Son Eklenenler" sırasıyla listelenecek.
+* **FR1:** ygulama açılışında kullanıcıyı minimal ve estetik bir karşılama ekranı karşılar. Bu ekranda galeriden seçilmiş küçük önizleme görselleri gösterilir ve tek bir ana aksiyon ("Düzenlemeye Başla") ile galeri görünümüne geçiş sağlanır. İlk girişte sistem galerisi erişim izni istenir.
 * **FR2:** iCloud (iOS) veya Google Photos (Android) üzerinden sadece seçilen görselin lokal belleğe çekilmesi sağlanacak.
 
 ### 3.2. GPU Tabanlı Düzenleme Motoru (Core Engine)
-* **FR3 (LUT Engine):** 15 adet önceden tanımlanmış .cube veya benzeri formatta analog filtre desteği. Filtre yoğunluğu 0-100 arası ayarlanabilir olmalı.
+* **FR3 (LUT Engine):** 15 adet önceden tanımlanmış .cube veya benzeri formatta yüksek kaliteli analog filtre desteği. Bu filtreler uygulamanın ana kullanım akışını oluşturur ve tek dokunuşla güçlü görsel sonuçlar üretir. Filtre yoğunluğu 0-100 arası ayarlanabilir olmalı.
 * **FR4 (Grain Engine):** Pro-grade kumlanma efekti. Statik bir görsel bindirme yerine, fotoğrafın çözünürlüğüne göre ölçeklenen dinamik bir "overlay" motoru kullanılmalı.
 * **FR5 (HSL Paneli):** Kırmızı, Turuncu, Sarı, Yeşil, Aqua, Mavi, Mor, Magenta renkleri için;
     * **Hue (Ton):** -100 / +100
     * **Saturation (Doygunluk):** -100 / +100
     * **Luminance (Parlaklık):** -100 / +100
-* **FR6 (Temel Araçlar):** Pozlama, Kontrast, Sıcaklık, Keskinlik, Solma (Fade) ve Vignette sliderları.
+* **FR6 (Temel Araçlar):** Pozlama, Kontrast, Sıcaklık, Doygunluk, Keskinlik, Solma (Fade) ve Vignette sliderları. Bu kontroller, hazır filtreler üzerine ince ayar yapmak veya tamamen manuel düzenleme yapmak için kullanılabilir.
 
 ### 3.3. Etkileşim ve Kayıt
 * **FR7 (Export):** Orijinal dosya boyutunu ve metadata (EXIF) verilerini koruyarak galeriye kayıt.
