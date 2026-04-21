@@ -1,0 +1,12 @@
+# Yerel / kişisel — repoya gönderilmeyecek
+progress.md
+
+# Ortak
+.DS_Store
+Thumbs.db
+*.log
+
+# Gizli anahtarlar (yanlışlıkla eklenmesin)
+.env
+.env.*
+!.env.example

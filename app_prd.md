@@ -23,7 +23,7 @@ Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. 
 ## 3. Fonksiyonel Gereksinimler (Functional Requirements)
 
 ### 3.1. Medya Erişimi ve Galeri Yönetimi
-* **FR1:** ygulama açılışında kullanıcıyı minimal ve estetik bir karşılama ekranı karşılar. Bu ekranda galeriden seçilmiş küçük önizleme görselleri gösterilir ve tek bir ana aksiyon ("Düzenlemeye Başla") ile galeri görünümüne geçiş sağlanır. İlk girişte sistem galerisi erişim izni istenir.
+* **FR1:** Uygulama açılışında kullanıcıyı minimal ve estetik bir karşılama ekranı karşılar. Bu ekranda galeriden seçilmiş küçük önizleme görselleri gösterilir ve tek bir ana aksiyon ("Düzenlemeye Başla") ile galeri görünümüne geçiş sağlanır. İlk girişte sistem galerisi erişim izni istenir.
 * **FR2:** iCloud (iOS) veya Google Photos (Android) üzerinden sadece seçilen görselin lokal belleğe çekilmesi sağlanacak.
 
 ### 3.2. GPU Tabanlı Düzenleme Motoru (Core Engine)
