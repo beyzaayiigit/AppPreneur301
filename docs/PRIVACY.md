@@ -20,6 +20,3 @@ Bu metin mağaza “Privacy Nutrition Label” / Data safety formları için ça
 
 - Düzenlenen görüntü, kaydettiğinizde fotoğraf kitaplığınıza yazılır. Orijinal dosyanın metadata’sı (EXIF) platform davranışına bağlı olarak tam veya kısmi korunabilir; kullanıcı bu konuda bilgilendirilir.
 
-## İletişim
-
-- [Geliştirici e-posta / web sitesi buraya eklenecek]
