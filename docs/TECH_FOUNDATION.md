@@ -20,7 +20,7 @@ Bu belge [app_prd.md](../app_prd.md) ve geliştirme planı ile uyumlu üretim ka
 ## 3. LUT ve grain lisansı
 
 - **15 “analog” ön ayar:** Şu an **ColorMatrix + yoğunluk (0–100)** ile simüle edilir; gerçek `.cube` 3B LUT dokuları için varlık klasörü ve SkSL örnekleme sonraki iterasyonda eklenecek.
-- **Grain:** SkSL içinde prosedürel gürültü + yoğunluk üniformu; harici doku dosyası kullanılmadığı için **üçüncü parti doku lisansı gerekmez**. Üretimde film grain dokusu eklenecekse [lumeris/assets/README.md](../lumeris/assets/README.md) bölümündeki lisans kontrol listesi uygulanır.
+- **Grain:** SkSL içinde prosedürel gürültü + yoğunluk üniformu; harici doku dosyası kullanılmadığı için **üçüncü parti doku lisansı gerekmez**. Üretimde film grain dokusu eklenecekse [mobile/assets/README.md](../mobile/assets/README.md) bölümündeki lisans kontrol listesi uygulanır.
 
 ## 4. Gizlilik ve veri
 

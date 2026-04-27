@@ -29,11 +29,10 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 
 ## 4) Mevcut durum notu
 
-- Şu an proje içinde çalışan uygulama `lumeris/` dizininde tek bir Expo mobil istemcisi olarak bulunuyor
+- Şu an proje içinde çalışan uygulama `mobile/` dizininde ayrı bir Expo mobil servisi olarak bulunuyor
 - Bu yapı ürün mantığı açısından tutarlı, çünkü MVP zaten zero-server olarak tasarlandı
-- Ancak hocanın beklediği proje yapısı açısından henüz tam uyumlu değil
-- Görünür bir `backend/` servisi henüz yok
-- Bu yüzden ilk teknik adım, yapıyı `backend/` ve `mobile/` olacak şekilde ayırmak olmalı
+- `backend/` ve `mobile/` dizinleri görünür şekilde ayrıldı
+- Backend minimum iskelet (`/health`) ile hazır
 
 ## 5) Faz bazlı çalışma planı
 
@@ -42,13 +41,12 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 - Dokümantasyon dosyaları oluşturuldu (`docs/TECH_FOUNDATION.md`, `docs/PRIVACY.md`, `docs/STORE_READINESS.md`)
 
 Kısa test:
-- `cd lumeris`
+- `cd mobile`
 - `npm install`
 - `npx expo start`
 
 ## Faz 1 - Servis ayrımı ve başlangıç kurulumu (ilk sıradaki iş)
-- Mevcut `lumeris/` dizinini istemci servisi olarak değerlendir
-- İstemciyi `mobile/` adıyla konumlandır
+- Mevcut mobil uygulamayı `mobile/` adıyla konumlandır
 - Ayrı bir `backend/` dizini oluştur
 - Backend için minimum çalışan bir servis iskeleti kur
 - Bu backend ilk aşamada fotoğraf işleme yapmak zorunda değil; amaç servis ayrımını göstermek
@@ -56,6 +54,9 @@ Kısa test:
 Kısa test:
 - Repo kökünde `mobile/` ve `backend/` dizinleri görünmeli
 - Her iki servisin de ayrı çalıştırma komutu olmalı
+
+Durum:
+- tamamlandı
 
 ## Faz 2 - Backend iskeleti
 - `backend/` içinde ayrı servis kurulumu
@@ -117,9 +118,3 @@ Her geliştirme adımında:
 3. Commit at: `git commit -m "Kısa ve net mesaj"`
 4. Push et: `git push -u origin feature/kisa-aciklama`
 5. PR aç ve bu plandaki ilgili fazı güncelle
-
-## 8) Bu hafta için önerilen sonraki 3 iş
-
-1. `backend/` servis iskeletini kurmak ve `mobile/` ayrımını tamamlamak
-2. Gerçek keskinlik filtresi (GPU veya uygun native yöntem)
-3. Büyük görsellerde preview/export stratejisi

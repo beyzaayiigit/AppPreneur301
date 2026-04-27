@@ -18,5 +18,5 @@
 ## Ortak
 
 - [ ] Sürüm numarası ve sürüm notları
-- [ ] LUT / grain için ticari lisans dosyaları arşivde (bkz. [lumeris/assets/README.md](../lumeris/assets/README.md))
+- [ ] LUT / grain için ticari lisans dosyaları arşivde (bkz. [mobile/assets/README.md](../mobile/assets/README.md))
 - [ ] KPI: Soğuk açılış → ilk filtre uygulama süresi cihazda ölçüldü mü? (hedef &lt; 3 sn, orta segment cihaz)
