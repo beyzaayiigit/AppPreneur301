@@ -8,6 +8,7 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 - Hedef kitle: 18-25 yaş, estetik odaklı mobil kullanıcılar
 - MVP ilkesi: Kayıt yok, reklam yok, buluta yükleme yok
 - Teknik ilke: Zero-server, offline-first, GPU ağırlıklı görsel işleme
+- Akademik beklenti: mobil uygulama yapılsa bile backend ve istemci ayrı servisler/dizinler olarak konumlanmalı
 
 ## 2) MVP içinde olacaklar (must-have)
 
@@ -26,7 +27,15 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 - Sosyal akış / topluluk
 - AI tabanlı nesne silme
 
-## 4) Faz bazlı çalışma planı
+## 4) Mevcut durum notu
+
+- Şu an proje içinde çalışan uygulama `lumeris/` dizininde tek bir Expo mobil istemcisi olarak bulunuyor
+- Bu yapı ürün mantığı açısından tutarlı, çünkü MVP zaten zero-server olarak tasarlandı
+- Ancak hocanın beklediği proje yapısı açısından henüz tam uyumlu değil
+- Görünür bir `backend/` servisi henüz yok
+- Bu yüzden ilk teknik adım, yapıyı `backend/` ve `mobile/` olacak şekilde ayırmak olmalı
+
+## 5) Faz bazlı çalışma planı
 
 ## Faz 0 - Teknik temel (tamamlandi)
 - Expo + React Native + TypeScript + Skia temeli kuruldu
@@ -37,14 +46,38 @@ Kısa test:
 - `npm install`
 - `npx expo start`
 
-## Faz 1 - Giriş ve medya (tamamlandı)
+## Faz 1 - Servis ayrımı ve başlangıç kurulumu (ilk sıradaki iş)
+- Mevcut `lumeris/` dizinini istemci servisi olarak değerlendir
+- İstemciyi `mobile/` adıyla konumlandır
+- Ayrı bir `backend/` dizini oluştur
+- Backend için minimum çalışan bir servis iskeleti kur
+- Bu backend ilk aşamada fotoğraf işleme yapmak zorunda değil; amaç servis ayrımını göstermek
+
+Kısa test:
+- Repo kökünde `mobile/` ve `backend/` dizinleri görünmeli
+- Her iki servisin de ayrı çalıştırma komutu olmalı
+
+## Faz 2 - Backend iskeleti
+- `backend/` içinde ayrı servis kurulumu
+- Öneri teknoloji: Node.js + TypeScript + Fastify
+- Minimum endpoint: `GET /health`
+- Temel env ve servis başlangıç yapısı
+- README ve çalıştırma talimatları
+
+Kısa test:
+- `cd backend`
+- `npm install`
+- `npm run dev`
+- `/health` endpoint'inin başarılı döndüğünü doğrula
+
+## Faz 3 - Giriş ve medya (tamamlandı)
 - Welcome akışı, izin yönetimi, galeriden seçim
 - "Düzenlemeye Başla" ile editör akışına geçiş
 
 Kısa test:
 - Uygulamayı aç, galeri izni ver, bir görsel seç ve editör ekranının açıldığını doğrula.
 
-## Faz 2 - Düzenleme motoru (devam ediyor)
+## Faz 4 - Düzenleme motoru (devam ediyor)
 - Presetler, temel renk matrisi, HSL, grain/vignette/fade uygulanmış durumda
 - Keskinlik etkisi şu an UI seviyesinde var; gerçek filtreleme iyileştirilecek
 - Gerçek 3B LUT (.cube) entegrasyonu bir sonraki adım
@@ -52,7 +85,7 @@ Kısa test:
 Kısa test:
 - Aynı fotoğraf üzerinde preset yoğunluğu, HSL ve grain değişikliklerinin anlık önizlemede çalıştığını doğrula.
 
-## Faz 3 - Etkileşim ve export (kısmen tamamlandı)
+## Faz 5 - Etkileşim ve export (kısmen tamamlandı)
 - Before/after compare çalışıyor
 - Undo/redo davranışı mevcut
 - Export akışı mevcut; EXIF koruması platform sınırlarına bağlı
@@ -60,7 +93,7 @@ Kısa test:
 Kısa test:
 - Düzenleme yap, galeriye kaydet, kaydedilen görseli aç ve kaliteyi kontrol et.
 
-## Faz 4 - Kalite, performans, mağaza hazırlığı (sıradaki odak)
+## Faz 6 - Kalite, performans, mağaza hazırlığı (sıradaki odak)
 - Büyük görsellerde bellek/perf optimizasyonu
 - Keskinlik filtresinin gerçeklenmesi
 - Store checklist maddelerinin tamamlanması
@@ -69,13 +102,13 @@ Kısa test:
 Kısa test:
 - Farklı cihazlarda açılış süresi, ilk düzenleme süresi ve crash oranlarını takip et.
 
-## 5) Takip metrikleri
+## 6) Takip metrikleri
 
 - Time-to-first-edit: hedef < 3 saniye
 - Crash-free session rate: hedef %99.9
 - Kullanıcı elde tutma (retention) ve silinme oranları
 
-## 6) GitHub çalışma ritmi
+## 7) GitHub çalışma ritmi
 
 Her geliştirme adımında:
 
@@ -85,9 +118,8 @@ Her geliştirme adımında:
 4. Push et: `git push -u origin feature/kisa-aciklama`
 5. PR aç ve bu plandaki ilgili fazı güncelle
 
-## 7) Bu hafta için önerilen sonraki 3 iş
+## 8) Bu hafta için önerilen sonraki 3 iş
 
-1. Gerçek keskinlik filtresi (GPU veya uygun native yöntem)  
-2. Büyük görsellerde preview/export stratejisi  
-3. 3B LUT (.cube) denemesi ve teknik risk notu
-
+1. `backend/` servis iskeletini kurmak ve `mobile/` ayrımını tamamlamak
+2. Gerçek keskinlik filtresi (GPU veya uygun native yöntem)
+3. Büyük görsellerde preview/export stratejisi
