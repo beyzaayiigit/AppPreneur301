@@ -60,15 +60,15 @@ Durum:
 
 ## Faz 2 - Backend iskeleti
 - `backend/` içinde ayrı servis kurulumu
-- Öneri teknoloji: Node.js + TypeScript + Fastify
+- Öneri teknoloji: Python + FastAPI
 - Minimum endpoint: `GET /health`
 - Temel env ve servis başlangıç yapısı
 - README ve çalıştırma talimatları
 
 Kısa test:
 - `cd backend`
-- `npm install`
-- `npm run dev`
+- `py -m uv sync`
+- `py -m uv run uvicorn app.main:app --reload --port 3001`
 - `/health` endpoint'inin başarılı döndüğünü doğrula
 
 ## Faz 3 - Giriş ve medya (tamamlandı)

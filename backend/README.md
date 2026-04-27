@@ -5,8 +5,8 @@ Bu servis, proje yapısında mobil istemciden ayrı konumlanan backend iskeletid
 ## Komutlar
 
 ```bash
-npm install
-npm run dev
+py -m uv sync
+py -m uv run uvicorn app.main:app --host 0.0.0.0 --port 3001 --reload
 ```
 
 Varsayilan adres: `http://localhost:3001`
