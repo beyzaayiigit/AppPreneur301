@@ -2,11 +2,8 @@ import { Skia } from '@shopify/react-native-skia';
 import type { EditState } from './editState';
 import { buildBaseColorMatrix } from './colorMatrix';
 
-const hslUniforms = Array.from(
-  { length: 8 },
-  (_, i) =>
-    `uniform float dh${i}; uniform float ds${i}; uniform float dl${i};`,
-).join('\n');
+/** Piksel tabanlı kumlama: kaba ince iki ölçek + güçlü genlik; sürüm değişince Skia önbelleği yenilenir */
+const PIPELINE_VERSION = 9;
 
 function buildSksl(): string {
   const cmDecl = Array.from({ length: 20 }, (_, i) => `uniform float cm${i};`).join('\n');
@@ -15,39 +12,21 @@ function buildSksl(): string {
 uniform shader image;
 uniform vec2 resolution;
 ${cmDecl}
-${hslUniforms}
 uniform float vignetteAmt;
 uniform float fadeAmt;
 uniform float grainAmt;
-
-float angDist(float a, float b) {
-  float d = abs(a - b);
-  return min(d, 360.0 - d);
-}
-
-float zoneWeight(float hDeg, float center) {
-  float d = angDist(hDeg, center);
-  float hw = 28.0;
-  return smoothstep(hw, 0.0, d);
-}
-
-vec3 rgb2hsv(vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
+uniform float selSkin;
+uniform float selSky;
+uniform float selGreen;
+uniform float selWarm;
+uniform float sharpAmt;
 
 half4 main(float2 coord) {
   half4 base = image.eval(coord);
+  half4 n = image.eval(coord + vec2(0.0, -1.0));
+  half4 s = image.eval(coord + vec2(0.0, 1.0));
+  half4 e = image.eval(coord + vec2(1.0, 0.0));
+  half4 w = image.eval(coord + vec2(-1.0, 0.0));
   float r = float(base.r);
   float g = float(base.g);
   float b = float(base.b);
@@ -57,25 +36,6 @@ half4 main(float2 coord) {
   float nb = cm10*r + cm11*g + cm12*b + cm13*a + cm14;
   float na = cm15*r + cm16*g + cm17*b + cm18*a + cm19;
   vec3 col = vec3(clamp(nr,0.0,1.0), clamp(ng,0.0,1.0), clamp(nb,0.0,1.0));
-  vec3 hsv = rgb2hsv(col);
-  float h = hsv.x * 360.0;
-  float w0 = zoneWeight(h, 0.0);
-  float w1 = zoneWeight(h, 30.0);
-  float w2 = zoneWeight(h, 60.0);
-  float w3 = zoneWeight(h, 120.0);
-  float w4 = zoneWeight(h, 180.0);
-  float w5 = zoneWeight(h, 240.0);
-  float w6 = zoneWeight(h, 275.0);
-  float w7 = zoneWeight(h, 315.0);
-  float ws = w0+w1+w2+w3+w4+w5+w6+w7+1e-4;
-  w0/=ws; w1/=ws; w2/=ws; w3/=ws; w4/=ws; w5/=ws; w6/=ws; w7/=ws;
-  float dht = w0*dh0+w1*dh1+w2*dh2+w3*dh3+w4*dh4+w5*dh5+w6*dh6+w7*dh7;
-  float dst = w0*ds0+w1*ds1+w2*ds2+w3*ds3+w4*ds4+w5*ds5+w6*ds6+w7*ds7;
-  float dlt = w0*dl0+w1*dl1+w2*dl2+w3*dl3+w4*dl4+w5*dl5+w6*dl6+w7*dl7;
-  hsv.x = fract(hsv.x + dht);
-  hsv.y = clamp(hsv.y * (1.0 + dst), 0.0, 1.0);
-  hsv.z = clamp(hsv.z + dlt, 0.0, 1.0);
-  col = hsv2rgb(hsv);
 
   vec2 uv = coord / max(resolution, vec2(1.0));
   float d = distance(uv, vec2(0.5)) * 1.25;
@@ -85,20 +45,80 @@ half4 main(float2 coord) {
   col = mix(col, vec3(1.0), fadeAmt * 0.35);
   col = mix(vec3(0.0), col, 1.0 - fadeAmt * 0.15);
 
-  float n = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
-  col += (n - 0.5) * grainAmt * 0.12;
+  // Selective Color Lite: maske tabanlı lokal renk düzeltmeleri.
+  float maxc = max(col.r, max(col.g, col.b));
+  float minc = min(col.r, min(col.g, col.b));
+  float chroma = max(maxc - minc, 1e-5);
+  float sat = chroma / max(maxc, 1e-5);
+  float luma = dot(col, vec3(0.299, 0.587, 0.114));
+
+  float skinMask = smoothstep(0.02, 0.22, col.r - col.b)
+    * smoothstep(0.0, 0.16, col.g - col.b)
+    * smoothstep(0.06, 0.55, sat)
+    * smoothstep(0.18, 0.85, luma);
+  float skyMask = smoothstep(0.0, 0.22, col.b - max(col.r, col.g))
+    * smoothstep(0.05, 0.58, sat)
+    * (1.0 - smoothstep(0.7, 0.98, luma));
+  float greenMask = smoothstep(0.0, 0.2, col.g - max(col.r, col.b))
+    * smoothstep(0.05, 0.58, sat)
+    * smoothstep(0.08, 0.92, luma);
+  float warmMask = smoothstep(0.0, 0.2, col.r - col.b)
+    * smoothstep(-0.02, 0.16, col.r - col.g)
+    * smoothstep(0.05, 0.55, sat);
+
+  vec3 gray = vec3(dot(col, vec3(0.2126, 0.7152, 0.0722)));
+  col = mix(col, mix(gray, col, 1.0 + selSkin * 0.55), skinMask);
+  col = mix(col, mix(gray, col, 1.0 + selSky * 0.62), skyMask);
+  col = mix(col, mix(gray, col, 1.0 + selGreen * 0.55), greenMask);
+  col = mix(col, mix(gray, col, 1.0 + selWarm * 0.48), warmMask);
+
+  col.r += skinMask * selSkin * 0.11 + warmMask * selWarm * 0.085;
+  col.b += skyMask * selSky * 0.14 - warmMask * selWarm * 0.04;
+  col.g += greenMask * selGreen * 0.095;
+
+  // Çok uç değerlerde yapay görünümü azalt.
+  col = mix(col, vec3(luma), 0.08 * max(0.0, sat - 0.85));
+
+  // Unsharp mask benzeri keskinlik: slider 1.0 nötr.
+  float sh = clamp(sharpAmt, -1.0, 1.0);
+  vec3 blur = (vec3(n.r, n.g, n.b) + vec3(s.r, s.g, s.b) + vec3(e.r, e.g, e.b) + vec3(w.r, w.g, w.b)) * 0.25;
+  vec3 detail = vec3(r, g, b) - blur;
+  float detailLuma = dot(abs(detail), vec3(0.299, 0.587, 0.114));
+  float detailMask = smoothstep(0.01, 0.18, detailLuma);
+  col += detail * sh * (0.9 * detailMask + 0.15);
+
+  float ga = clamp(grainAmt, 0.0, 1.0);
+  vec2 ip = floor(coord);
+  float h0 = fract(sin(dot(ip, vec2(127.1, 311.7))) * 43758.5453123);
+  float coarse = h0 - 0.5;
+  vec2 ipFine = floor(coord * 1.82);
+  float hf = fract(sin(dot(ipFine, vec2(189.1, 157.3))) * 37821.4567);
+  float fine = hf - 0.5;
+  float mono = coarse * 0.66 + fine * 0.34;
+  float lumaMask = 0.45 + (1.0 - luma) * 0.55; // gölgede daha görünür, parlakta daha hafif
+  float blotch = fract(sin(dot(floor(coord * 0.33), vec2(91.7, 43.1))) * 15731.0) - 0.5;
+  float amp = (ga * ga * 0.22 + ga * 0.06) * lumaMask;
+  amp *= 1.0 + blotch * ga * 0.35;
+  float grainR = mono + (coarse * 0.16);
+  float grainG = mono;
+  float grainB = mono + (fine * 0.14);
+  col += vec3(grainR, grainG, grainB) * amp;
+
+  col = clamp(col, 0.0, 1.0);
 
   return half4(half(col.r), half(col.g), half(col.b), half(clamp(na,0.0,1.0)));
 }
 `;
 }
 
-let cached: ReturnType<typeof Skia.RuntimeEffect.Make> | null | undefined;
+let cachedEffect: ReturnType<typeof Skia.RuntimeEffect.Make> | null | undefined;
+let cachedVersion = 0;
 
 export function getFullPipelineEffect() {
-  if (cached !== undefined) return cached;
-  cached = Skia.RuntimeEffect.Make(buildSksl());
-  return cached;
+  if (cachedEffect !== undefined && cachedVersion === PIPELINE_VERSION) return cachedEffect;
+  cachedEffect = Skia.RuntimeEffect.Make(buildSksl());
+  cachedVersion = PIPELINE_VERSION;
+  return cachedEffect;
 }
 
 export function buildPipelineUniforms(
@@ -111,13 +131,12 @@ export function buildPipelineUniforms(
     vignetteAmt: Math.max(0, Math.min(1, state.vignette)),
     fadeAmt: Math.max(0, Math.min(1, state.fade)),
     grainAmt: Math.max(0, Math.min(1, state.grain)),
+    selSkin: Math.max(-1, Math.min(1, state.selectiveSkin)),
+    selSky: Math.max(-1, Math.min(1, state.selectiveSky)),
+    selGreen: Math.max(-1, Math.min(1, state.selectiveGreen)),
+    selWarm: Math.max(-1, Math.min(1, state.selectiveWarm)),
+    sharpAmt: Math.max(-1, Math.min(1, state.sharpness - 1)),
   };
   for (let i = 0; i < 20; i++) u[`cm${i}`] = cm[i] ?? 0;
-  for (let i = 0; i < 8; i++) {
-    const ch = state.hsl[i] ?? { h: 0, s: 0, l: 0 };
-    u[`dh${i}`] = (ch.h / 100) * 0.12;
-    u[`ds${i}`] = (ch.s / 100) * 0.55;
-    u[`dl${i}`] = (ch.l / 100) * 0.22;
-  }
   return u;
 }

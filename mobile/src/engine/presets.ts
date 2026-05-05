@@ -1,6 +1,27 @@
 /** 20 Skia ColorMatrix katsayısı (satır majör 4×5). .cube LUT ile değiştirilebilir. */
 
+/** Küçük önizleme etiketi (mockup’taki kısa kod hissi) */
+export const PRESET_SHORT_LABELS = [
+  'ORG',
+  'NEG',
+  'WARM',
+  'COOL',
+  '70S',
+  'B&W',
+  'GOLD',
+  'WOOD',
+  'PAST',
+  'LOW',
+  'NEON',
+  'SAND',
+  'VINT',
+  'BLUE',
+  'PINK',
+  'MATT',
+] as const;
+
 export const PRESET_NAMES = [
+  'Original',
   'Klasik Neg',
   'Sıcak Portre',
   'Soğuk Gölge',
@@ -48,9 +69,18 @@ const RAW_PRESETS: number[][] = [
   mixMatrices(I(), scaleR(0.96, 0.97, 0.98, 0.03, 0.03, 0.03), 1),
 ];
 
+export function presetThumbBackground(index: number): string {
+  if (index === 0) return 'hsl(260, 8%, 22%)';
+  const h = ((index - 1) * 47) % 360;
+  return `hsl(${h}, 38%, 24%)`;
+}
+
 export function getPresetMatrix(index: number, intensity01: number): number[] {
   const id = I();
-  const i = Math.max(0, Math.min(RAW_PRESETS.length - 1, index));
+  if (index === 0) return id;
+
+  const presetIdx = index - 1;
+  const i = Math.max(0, Math.min(RAW_PRESETS.length - 1, presetIdx));
   const t = Math.max(0, Math.min(1, intensity01));
   return mixMatrices(id, RAW_PRESETS[i], t);
 }

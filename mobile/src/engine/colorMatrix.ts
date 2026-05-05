@@ -68,7 +68,7 @@ function temperatureMatrix(t: number): number[] {
   return [1 + w, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 - w, 0, 0, 0, 0, 0, 1, 0];
 }
 
-/** Temel ayarlar + LUT yoğunluğu birleşik 20’li matris (HSL shader öncesi). */
+/** Temel ayarlar + ön ayar yoğunluğu birleşik 20’li matris (Skia pipeline girişi). */
 export function buildBaseColorMatrix(state: EditState): number[] {
   const preset = getPresetMatrix(state.presetIndex, state.presetIntensity / 100);
   let m = [...IDENTITY_MATRIX];
@@ -77,5 +77,10 @@ export function buildBaseColorMatrix(state: EditState): number[] {
   m = multiplyColorMatrices(saturationMatrix(state.saturation), m);
   m = multiplyColorMatrices(temperatureMatrix(state.temperature), m);
   m = multiplyColorMatrices(preset, m);
+  const pop = Math.max(0, Math.min(1, state.pop));
+  if (pop > 0) {
+    const punch = 1 + pop * 0.28;
+    m = multiplyColorMatrices(contrastMatrix(punch), m);
+  }
   return m;
 }

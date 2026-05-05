@@ -1,16 +1,3 @@
-export const HSL_LABELS = [
-  'Kırmızı',
-  'Turuncu',
-  'Sarı',
-  'Yeşil',
-  'Aqua',
-  'Mavi',
-  'Mor',
-  'Magenta',
-] as const;
-
-export type HslChannel = { h: number; s: number; l: number };
-
 export type EditState = {
   presetIndex: number;
   presetIntensity: number;
@@ -18,15 +5,19 @@ export type EditState = {
   contrast: number;
   saturation: number;
   temperature: number;
+  /** Ek “punch” — mockup’taki Pop; preset + temel renkten sonra hafif kontrast artışı */
+  pop: number;
   sharpness: number;
   fade: number;
   vignette: number;
   grain: number;
-  hsl: HslChannel[];
+  selectiveSkin: number;
+  selectiveSky: number;
+  selectiveGreen: number;
+  selectiveWarm: number;
 };
 
 export function createDefaultEditState(): EditState {
-  const hsl = Array.from({ length: 8 }, () => ({ h: 0, s: 0, l: 0 }));
   return {
     presetIndex: 0,
     presetIntensity: 100,
@@ -34,17 +25,18 @@ export function createDefaultEditState(): EditState {
     contrast: 1,
     saturation: 1,
     temperature: 0,
+    pop: 0,
     sharpness: 1,
     fade: 0,
     vignette: 0,
-    grain: 0.15,
-    hsl,
+    grain: 0,
+    selectiveSkin: 0,
+    selectiveSky: 0,
+    selectiveGreen: 0,
+    selectiveWarm: 0,
   };
 }
 
 export function cloneEditState(s: EditState): EditState {
-  return {
-    ...s,
-    hsl: s.hsl.map((c) => ({ ...c })),
-  };
+  return { ...s };
 }

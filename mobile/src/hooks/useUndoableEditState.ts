@@ -33,7 +33,7 @@ export function useUndoableEditState() {
     setCurrent(cloneEditState(next));
   }, []);
 
-  /** Preset / HSL sekmesi gibi anında uygulanan değişiklikler. */
+  /** Preset gibi anında uygulanan değişiklikler. */
   const commitReplace = useCallback((next: EditState) => {
     setPast((p) => [...p.slice(-(MAX - 1)), cloneEditState(curRef.current)]);
     setFuture([]);

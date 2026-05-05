@@ -1,7 +1,8 @@
 import Slider from '@react-native-community/slider';
-import * as Haptics from 'expo-haptics';
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '../theme/colors';
+import { dark, theme } from '../theme/colors';
+
+type Appearance = 'light' | 'dark';
 
 type Props = {
   label: string;
@@ -14,6 +15,8 @@ type Props = {
   onSlidingComplete?: (v: number) => void;
   format?: (v: number) => string;
   accessibilityLabel?: string;
+  /** Varsayılan: açık tema (theme); editör kabuğu için `dark` */
+  appearance?: Appearance;
 };
 
 export function SliderRow({
@@ -27,7 +30,13 @@ export function SliderRow({
   onSlidingComplete,
   format = (v) => String(Math.round(v * 100) / 100),
   accessibilityLabel,
+  appearance = 'light',
 }: Props) {
+  const isDark = appearance === 'dark';
+  const trackMin = isDark ? dark.accent : theme.lilacDeep;
+  const trackMax = isDark ? dark.border : theme.border;
+  const thumb = isDark ? dark.accent : theme.lilacDeep;
+
   return (
     <View
       style={styles.row}
@@ -35,7 +44,10 @@ export function SliderRow({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityValue={{ text: format(value) }}
     >
-      <Text style={styles.label}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={[styles.label, isDark && styles.labelDark]}>{label}</Text>
+        <Text style={[styles.value, isDark && styles.valueDark]}>{format(value)}</Text>
+      </View>
       <Slider
         style={styles.slider}
         minimumValue={min}
@@ -43,23 +55,27 @@ export function SliderRow({
         step={step}
         value={value}
         onSlidingStart={onSlidingStart}
-        onValueChange={(v) => {
-          onChange(v);
-          void Haptics.selectionAsync();
-        }}
+        onValueChange={onChange}
         onSlidingComplete={(v) => onSlidingComplete?.(v)}
-        minimumTrackTintColor={theme.lilacDeep}
-        maximumTrackTintColor={theme.border}
-        thumbTintColor={theme.lilacDeep}
+        minimumTrackTintColor={trackMin}
+        maximumTrackTintColor={trackMax}
+        thumbTintColor={thumb}
       />
-      <Text style={styles.value}>{format(value)}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { marginBottom: 12 },
-  label: { color: theme.text, fontSize: 13, marginBottom: 4, fontWeight: '600' },
+  row: { marginBottom: 14 },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  label: { color: theme.text, fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
+  labelDark: { color: dark.text },
   slider: { width: '100%', height: 36 },
-  value: { color: theme.textMuted, fontSize: 12 },
+  value: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
+  valueDark: { color: dark.textMuted },
 });

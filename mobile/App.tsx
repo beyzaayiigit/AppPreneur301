@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 import { EditorScreen } from './src/screens/EditorScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { markLaunchStarted, recordAppLaunch } from './src/lib/kpi';
-import { theme } from './src/theme/colors';
+import { dark } from './src/theme/colors';
 
 export default function App() {
   const [uri, setUri] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       {uri ? (
         <EditorScreen imageUri={uri} onBack={() => setUri(null)} />
       ) : (
@@ -28,5 +28,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.lilac },
+  root: { flex: 1, backgroundColor: dark.bg },
 });
