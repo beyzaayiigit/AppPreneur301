@@ -1,7 +1,11 @@
 import os
-from datetime import datetime, timezone
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.routers.health import router as health_router
+from app.routers.v1 import api_router as api_v1_router
+from app.schemas import RootResponse
 
 
 def parse_port(value: str | None) -> int:
@@ -18,13 +22,41 @@ def parse_port(value: str | None) -> int:
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = parse_port(os.getenv("PORT"))
 
-app = FastAPI(title="Lumeris Backend", version="1.0.0")
+app = FastAPI(
+    title="Lumeris Backend",
+    version="1.0.0",
+    description=(
+        "Lumeris için yardımcı API: sağlık, sürüm, istemci ipuçları, ön ayar kataloğu ve "
+        "**karşılama deneyimi** (ipuçları, vitrin ön ayarı, ürün sütunları). "
+        "Fotoğraf işleme veya depolama sunulmaz — görüntü verisi istemez."
+    ),
+)
+
+_cors_raw = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health_router)
+app.include_router(api_v1_router, prefix="/api/v1")
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {
-        "service": "lumeris-backend",
-        "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+def public_base_url() -> str:
+    return os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:3001").rstrip("/")
+
+
+@app.get("/", response_model=RootResponse)
+def root() -> RootResponse:
+    base = public_base_url()
+    return RootResponse(
+        service="lumeris-backend",
+        docs=f"{base}/docs",
+        health=f"{base}/health",
+        api_v1=f"{base}/api/v1",
+        experience=f"{base}/api/v1/experience",
+    )

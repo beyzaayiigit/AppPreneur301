@@ -8,3 +8,6 @@ dependencies = [
   "uvicorn[standard]",
 ]
 
+[dependency-groups]
+dev = ["httpx"]
+

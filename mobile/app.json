@@ -36,6 +36,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {
+      "lumerisApiBaseUrl": ""
+    },
     "plugins": [
       [
         "expo-image-picker",
@@ -48,7 +51,8 @@
         {
           "photosPermission": "Lumeris, son fotoğraflarınızı önizlemek ve düzenlemek için galeri erişimine ihtiyaç duyar.",
           "savePhotosPermission": "Lumeris, düzenlenen fotoğrafı kaydetmek için galeriye yazma iznine ihtiyaç duyar.",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["photo"]
         }
       ]
     ]

@@ -1,5 +1,5 @@
 import Slider from '@react-native-community/slider';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { dark, theme } from '../theme/colors';
 
 type Appearance = 'light' | 'dark';
@@ -17,6 +17,8 @@ type Props = {
   accessibilityLabel?: string;
   /** Varsayılan: açık tema (theme); editör kabuğu için `dark` */
   appearance?: Appearance;
+  /** Kategori/çip değişince Slider thumb kaymasını önlemek için benzersiz anahtar */
+  sliderRemountKey?: string;
 };
 
 export function SliderRow({
@@ -31,15 +33,19 @@ export function SliderRow({
   format = (v) => String(Math.round(v * 100) / 100),
   accessibilityLabel,
   appearance = 'light',
+  sliderRemountKey,
 }: Props) {
   const isDark = appearance === 'dark';
   const trackMin = isDark ? dark.accent : theme.lilacDeep;
   const trackMax = isDark ? dark.border : theme.border;
   const thumb = isDark ? dark.accent : theme.lilacDeep;
 
+  const sliderKey = sliderRemountKey ?? label;
+
   return (
     <View
       style={styles.row}
+      collapsable={false}
       accessibilityRole="adjustable"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityValue={{ text: format(value) }}
@@ -48,19 +54,22 @@ export function SliderRow({
         <Text style={[styles.label, isDark && styles.labelDark]}>{label}</Text>
         <Text style={[styles.value, isDark && styles.valueDark]}>{format(value)}</Text>
       </View>
-      <Slider
-        style={styles.slider}
-        minimumValue={min}
-        maximumValue={max}
-        step={step}
-        value={value}
-        onSlidingStart={onSlidingStart}
-        onValueChange={onChange}
-        onSlidingComplete={(v) => onSlidingComplete?.(v)}
-        minimumTrackTintColor={trackMin}
-        maximumTrackTintColor={trackMax}
-        thumbTintColor={thumb}
-      />
+      <View style={styles.sliderWrap} collapsable={false}>
+        <Slider
+          key={Platform.OS === 'android' ? `${sliderKey}-${min}-${max}` : sliderKey}
+          style={styles.slider}
+          minimumValue={min}
+          maximumValue={max}
+          step={step}
+          value={value}
+          onSlidingStart={onSlidingStart}
+          onValueChange={onChange}
+          onSlidingComplete={(v) => onSlidingComplete?.(v)}
+          minimumTrackTintColor={trackMin}
+          maximumTrackTintColor={trackMax}
+          thumbTintColor={thumb}
+        />
+      </View>
     </View>
   );
 }
@@ -75,6 +84,7 @@ const styles = StyleSheet.create({
   },
   label: { color: theme.text, fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
   labelDark: { color: dark.text },
+  sliderWrap: { width: '100%' },
   slider: { width: '100%', height: 36 },
   value: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
   valueDark: { color: dark.textMuted },

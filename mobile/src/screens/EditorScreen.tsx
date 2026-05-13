@@ -1,4 +1,5 @@
 import { ImageFormat, useCanvasRef } from '@shopify/react-native-skia';
+import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -64,6 +65,29 @@ function computeContainRect(
   };
 }
 
+/** Skia snapshot için tamsayı sınırlar; taşma / sıfır boyut hatalarını azaltır */
+function clampSnapRect(
+  rect: { x: number; y: number; width: number; height: number },
+  maxW: number,
+  maxH: number,
+): { x: number; y: number; width: number; height: number } {
+  const x = Math.max(0, Math.floor(rect.x));
+  const y = Math.max(0, Math.floor(rect.y));
+  let width = Math.max(1, Math.round(rect.width));
+  let height = Math.max(1, Math.round(rect.height));
+  if (x + width > maxW) width = Math.max(1, maxW - x);
+  if (y + height > maxH) height = Math.max(1, maxH - y);
+  return { x, y, width, height };
+}
+
+function mediaLibraryAccessOk(r: MediaLibrary.PermissionResponse): boolean {
+  return (
+    r.granted ||
+    r.status === MediaLibrary.PermissionStatus.GRANTED ||
+    r.accessPrivileges === 'limited'
+  );
+}
+
 function computeAspectCropRect(
   rect: { x: number; y: number; width: number; height: number },
   aspect: ExportAspect,
@@ -114,28 +138,42 @@ type Props = {
 };
 
 function formatExposure(v: number) {
-  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
+  if (v === 0) return '0.00';
+  return `${v > 0 ? '+' : '-'}${Math.abs(v).toFixed(2)}`;
 }
 
 function formatContrastUi(c: number) {
   const x = Math.round((c - 1) * 100);
-  return `${x >= 0 ? '+' : ''}${x}`;
+  if (x === 0) return '0';
+  return `${x > 0 ? '+' : ''}${x}`;
 }
 
 function formatWarmthUi(t: number) {
   const x = Math.round(t * 100);
-  const sign = x >= 0 ? '+' : '-';
-  const body = String(Math.abs(x)).padStart(2, '0');
-  return `${sign}${body}`;
+  if (x === 0) return '0';
+  const sign = x > 0 ? '+' : '-';
+  return `${sign}${Math.abs(x)}`;
 }
 
 function formatPopUi(p: number) {
-  return `+${Math.round(p * 100)}`;
+  const x = Math.round(p * 100);
+  if (x === 0) return '0';
+  return `+${x}`;
 }
 
 function formatSelectiveUi(v: number) {
   const x = Math.round(v * 100);
-  return `${x >= 0 ? '+' : ''}${x}`;
+  if (x === 0) return '0';
+  return `${x > 0 ? '+' : ''}${x}`;
+}
+
+/** 0 → "0"; gereksiz ondalıkları kısaltır */
+function formatDecimalUi(v: number, maxDecimals = 2): string {
+  if (!Number.isFinite(v)) return '0';
+  const t = parseFloat(v.toFixed(maxDecimals));
+  if (t === 0) return '0';
+  if (Number.isInteger(t)) return String(t);
+  return String(t);
 }
 
 const ADJUST_CONTROLS: {
@@ -151,22 +189,22 @@ const ADJUST_CONTROLS: {
   { category: 'light', key: 'contrast', label: 'CONTRAST', min: 0.5, max: 1.5, step: 0.01, format: formatContrastUi },
   { category: 'light', key: 'pop', label: 'POP', min: 0, max: 1, step: 0.02, format: formatPopUi },
   { category: 'color', key: 'temperature', label: 'WARMTH', min: -1, max: 1, step: 0.02, format: formatWarmthUi },
-  { category: 'color', key: 'saturation', label: 'SATURATION', min: 0, max: 2, step: 0.01 },
+  { category: 'color', key: 'saturation', label: 'SATURATION', min: 0, max: 2, step: 0.01, format: formatDecimalUi },
   { category: 'color', key: 'selectiveSkin', label: 'SKIN', min: -1, max: 1, step: 0.02, format: formatSelectiveUi },
   { category: 'color', key: 'selectiveSky', label: 'SKY / BLUE', min: -1, max: 1, step: 0.02, format: formatSelectiveUi },
   { category: 'color', key: 'selectiveGreen', label: 'GREEN', min: -1, max: 1, step: 0.02, format: formatSelectiveUi },
   { category: 'color', key: 'selectiveWarm', label: 'WARM', min: -1, max: 1, step: 0.02, format: formatSelectiveUi },
-  { category: 'detail', key: 'sharpness', label: 'SHARPNESS', min: 0, max: 2, step: 0.05 },
-  { category: 'detail', key: 'grain', label: 'GRAIN', min: 0, max: 1, step: 0.02 },
-  { category: 'detail', key: 'fade', label: 'FADE', min: 0, max: 1, step: 0.02 },
-  { category: 'detail', key: 'vignette', label: 'VIGNETTE', min: 0, max: 1, step: 0.02 },
+  { category: 'detail', key: 'sharpness', label: 'SHARPNESS', min: 0, max: 2, step: 0.05, format: formatDecimalUi },
+  { category: 'detail', key: 'grain', label: 'GRAIN', min: 0, max: 1, step: 0.02, format: formatDecimalUi },
+  { category: 'detail', key: 'fade', label: 'FADE', min: 0, max: 1, step: 0.02, format: formatDecimalUi },
+  { category: 'detail', key: 'vignette', label: 'VIGNETTE', min: 0, max: 1, step: 0.02, format: formatDecimalUi },
 ];
 
 export function EditorScreen({ imageUri, onBack }: Props) {
   const { width: winW, height: winH } = useWindowDimensions();
   const screenH = Dimensions.get('screen').height;
   const topInset = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 6 : 44;
-  const panelHeight = Math.max(156, Math.min(220, Math.round(winH * 0.21)));
+  const panelHeight = Math.max(168, Math.min(236, Math.round(winH * 0.225)));
   const previewMaxW = winW - PREVIEW_SIDE_PAD;
   const previewMaxH = Math.round(winH * 0.58);
   const canvasRef = useCanvasRef();
@@ -194,7 +232,8 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   const [activeCategory, setActiveCategory] = useState<AdjustCategory>('light');
   const [activeAdjust, setActiveAdjust] = useState<AdjustKey>('exposure');
   const navBarInset = Math.max(0, screenH - winH);
-  const bottomSafePad = Platform.OS === 'android' ? Math.max(8, navBarInset) : 8;
+  /** Pencere–ekran farkı bazen üst çentiği de içerir; alt tab bar’da aşırı boşluk oluşmasın diye tavanlı */
+  const bottomNavPad = 6 + Math.min(Math.max(navBarInset, 4), 32);
   const isLandscapeImage = (imageDims?.width ?? 0) > (imageDims?.height ?? Number.MAX_SAFE_INTEGER);
 
   useEffect(() => {
@@ -236,26 +275,84 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   const exportImage = useCallback(async () => {
     setExporting(true);
     try {
-      const perm = await MediaLibrary.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('İzin gerekli', 'Fotoğrafı kaydetmek için medya kitaplığı izni verin.');
+      const androidGranular: MediaLibrary.GranularPermission[] | undefined =
+        Platform.OS === 'android' ? ['photo'] : undefined;
+
+      let permOk = false;
+      try {
+        let perm = await MediaLibrary.requestPermissionsAsync(true, androidGranular);
+        if (!mediaLibraryAccessOk(perm)) {
+          perm = await MediaLibrary.requestPermissionsAsync(false, androidGranular);
+        }
+        permOk = mediaLibraryAccessOk(perm);
+      } catch {
+        permOk = false;
+      }
+
+      const isExpoGoAndroid =
+        Constants.executionEnvironment === 'storeClient' && Platform.OS === 'android';
+
+      if (!permOk && !isExpoGoAndroid) {
+        Alert.alert('İzin gerekli', 'Fotoğrafı kaydetmek için fotoğraf / medya kitaplığı izni verin.');
         return;
       }
+
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert('Dışa aktarma', 'Cihazda geçici dosya konumu kullanılamıyor.');
+        return;
+      }
+
       const srcW = imageDims?.width ?? previewSize.w;
       const srcH = imageDims?.height ?? previewSize.h;
       const containRect = computeContainRect(srcW, srcH, previewSize.w, previewSize.h);
-      const cropRect = computeAspectCropRect(containRect, exportAspect);
+      const cropRect = clampSnapRect(
+        computeAspectCropRect(containRect, exportAspect),
+        previewSize.w,
+        previewSize.h,
+      );
       const snap = canvasRef.current?.makeImageSnapshot(cropRect);
       if (!snap) {
         Alert.alert('Dışa aktarma', 'Görüntü oluşturulamadı. Tekrar deneyin.');
         return;
       }
       const base64 = snap.encodeToBase64(ImageFormat.JPEG, jpegQuality);
-      const path = `${FileSystem.cacheDirectory ?? ''}lumeris_export_${Date.now()}.jpg`;
+      const path = `${baseDir}lumeris_export_${Date.now()}.jpg`;
       await FileSystem.writeAsStringAsync(path, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      await MediaLibrary.saveToLibraryAsync(path);
+
+      if (!permOk && isExpoGoAndroid) {
+        const contentUri = await FileSystem.getContentUriAsync(path);
+        await Share.share({ title: 'Lumeris', url: contentUri });
+        setExportOpen(false);
+        Alert.alert(
+          'Expo Go (Android)',
+          'Bu ortamda galeriye doğrudan kayıt kısıtlıdır; dosyayı paylaşım ekranından Fotoğraflar veya Dosyalar uygulamasına kaydedebilirsiniz.',
+        );
+        return;
+      }
+
+      try {
+        await MediaLibrary.saveToLibraryAsync(path);
+      } catch (saveErr) {
+        if (Platform.OS === 'android') {
+          try {
+            const contentUri = await FileSystem.getContentUriAsync(path);
+            await Share.share({ title: 'Lumeris', url: contentUri });
+            setExportOpen(false);
+            Alert.alert(
+              'Paylaş',
+              'Galeriye otomatik kayıt başarısız oldu; dosyayı paylaşım sayfasından kaydedebilirsiniz.',
+            );
+            return;
+          } catch {
+            throw saveErr;
+          }
+        }
+        throw saveErr;
+      }
+
       setExportOpen(false);
       Alert.alert('Kaydedildi', 'Fotoğraf galerinize eklendi. EXIF koruma düzeyi cihaza bağlıdır.');
     } catch (e) {
@@ -272,7 +369,11 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     const srcW = imageDims?.width ?? previewSize.w;
     const srcH = imageDims?.height ?? previewSize.h;
     const containRect = computeContainRect(srcW, srcH, previewSize.w, previewSize.h);
-    const cropRect = computeAspectCropRect(containRect, exportAspect);
+    const cropRect = clampSnapRect(
+      computeAspectCropRect(containRect, exportAspect),
+      previewSize.w,
+      previewSize.h,
+    );
     const snap = canvasRef.current?.makeImageSnapshot(cropRect);
     if (!snap) {
       setExportPreviewUri(null);
@@ -343,20 +444,13 @@ export function EditorScreen({ imageUri, onBack }: Props) {
           </Pressable>
         </View>
         <View style={[styles.panel, { height: panelHeight }]}>
-          <ScrollView
-            style={styles.panelScroll}
-            contentContainerStyle={[
-              styles.panelScrollContent,
-              { paddingBottom: 16 },
-            ]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+          <View style={styles.panelBody}>
             {editorTab === 'looks' ? (
               <>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.presetStrip}
                 >
                   {PRESET_NAMES.map((name, idx) => {
@@ -396,6 +490,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                       min={0}
                       max={100}
                       step={1}
+                      sliderRemountKey={`intensity-${current.presetIndex}`}
                       format={(v) => `${Math.round(v)}`}
                       onChange={(v) => update((c) => ({ ...c, presetIntensity: v }))}
                       onSlidingStart={() => {
@@ -429,6 +524,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.adjustChipRow}
                 >
                   {controlsInCategory.map((control) => {
@@ -454,6 +550,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                   max={activeControl.max}
                   step={activeControl.step}
                   format={activeControl.format}
+                  sliderRemountKey={`${activeCategory}-${activeControl.key}`}
                   onChange={(v) => updateAdjustValue(activeControl.key, v)}
                   onSlidingStart={() => {
                     beginGesture();
@@ -463,10 +560,9 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                 />
               </>
             )}
-          </ScrollView>
-
+          </View>
         </View>
-        <View style={[styles.bottomNav, { paddingBottom: 8 + bottomSafePad }]}>
+        <View style={[styles.bottomNav, { paddingBottom: bottomNavPad }]}>
           <Pressable
             style={[styles.navCell, editorTab === 'looks' && styles.navCellOn]}
             onPress={() => setTab('looks')}
@@ -610,6 +706,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
+    minHeight: 140,
   },
   previewSlotLandscape: {
     justifyContent: 'center',
@@ -640,6 +737,7 @@ const styles = StyleSheet.create({
   },
   resBadgeText: { color: dark.text, fontSize: 11, fontWeight: '600' },
   panel: {
+    flexShrink: 0,
     minHeight: 156,
     marginTop: 6,
     backgroundColor: dark.surface,
@@ -648,6 +746,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderColor: dark.border,
+  },
+  panelBody: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -669,9 +772,13 @@ const styles = StyleSheet.create({
   },
   categoryChipText: { color: dark.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   categoryChipTextOn: { color: dark.accent },
-  panelScroll: { flex: 1 },
-  panelScrollContent: { paddingHorizontal: 16, paddingTop: 8 },
-  presetStrip: { gap: 10, paddingVertical: 4, paddingRight: 8 },
+  presetStrip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
   presetTile: { width: 64, alignItems: 'center' },
   presetTileInner: {
     width: 56,
@@ -699,7 +806,14 @@ const styles = StyleSheet.create({
   },
   presetNameOn: { color: dark.accent, fontWeight: '700' },
   presetTileLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  adjustChipRow: { gap: 8, paddingBottom: 8, paddingTop: 2, paddingRight: 10 },
+  adjustChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 8,
+    paddingTop: 2,
+    paddingRight: 10,
+  },
   adjustChip: {
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -715,7 +829,7 @@ const styles = StyleSheet.create({
   adjustChipText: { color: dark.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   adjustChipTextOn: { color: dark.accent },
   looksIntensitySlot: {
-    minHeight: 72,
+    minHeight: 80,
     justifyContent: 'center',
     marginTop: 8,
   },
@@ -727,8 +841,7 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 22,
+    paddingTop: 4,
     gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: dark.border,
@@ -737,7 +850,7 @@ const styles = StyleSheet.create({
   navCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 14,
     backgroundColor: dark.bgElevated,
   },
