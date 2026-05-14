@@ -17,6 +17,8 @@ export type EditState = {
   selectiveWarm: number;
 };
 
+export type AdjustKey = Exclude<keyof EditState, 'presetIndex' | 'presetIntensity'>;
+
 export function createDefaultEditState(): EditState {
   return {
     presetIndex: 0,
@@ -40,3 +42,4 @@ export function createDefaultEditState(): EditState {
 export function cloneEditState(s: EditState): EditState {
   return { ...s };
 }
+

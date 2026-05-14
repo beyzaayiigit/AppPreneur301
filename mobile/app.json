@@ -52,9 +52,12 @@
           "photosPermission": "Lumeris, son fotoğraflarınızı önizlemek ve düzenlemek için galeri erişimine ihtiyaç duyar.",
           "savePhotosPermission": "Lumeris, düzenlenen fotoğrafı kaydetmek için galeriye yazma iznine ihtiyaç duyar.",
           "isAccessMediaLocationEnabled": true,
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

@@ -19,6 +19,10 @@ type Props = {
   appearance?: Appearance;
   /** Kategori/çip değişince Slider thumb kaymasını önlemek için benzersiz anahtar */
   sliderRemountKey?: string;
+  /** `appearance="dark"` üzerine yazılır; mock’taki sage thumb / moss track için */
+  thumbTintColor?: string;
+  minimumTrackTintColor?: string;
+  maximumTrackTintColor?: string;
 };
 
 export function SliderRow({
@@ -34,11 +38,14 @@ export function SliderRow({
   accessibilityLabel,
   appearance = 'light',
   sliderRemountKey,
+  thumbTintColor,
+  minimumTrackTintColor,
+  maximumTrackTintColor,
 }: Props) {
   const isDark = appearance === 'dark';
-  const trackMin = isDark ? dark.accent : theme.lilacDeep;
-  const trackMax = isDark ? dark.border : theme.border;
-  const thumb = isDark ? dark.accent : theme.lilacDeep;
+  const trackMin = minimumTrackTintColor ?? (isDark ? dark.primary : theme.lilacDeep);
+  const trackMax = maximumTrackTintColor ?? (isDark ? dark.surfaceBright : theme.border);
+  const thumb = thumbTintColor ?? (isDark ? dark.primary : theme.lilacDeep);
 
   const sliderKey = sliderRemountKey ?? label;
 

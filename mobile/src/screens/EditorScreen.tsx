@@ -2,8 +2,10 @@ import { ImageFormat, useCanvasRef } from '@shopify/react-native-skia';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -19,15 +21,30 @@ import {
   View,
 } from 'react-native';
 import { EditorCanvas } from '../components/EditorCanvas';
+import { AdjustToolGlyph, LooksFlowerGlyph, SlidersNavGlyph } from '../components/EditorGlyphIcons';
 import { SliderRow } from '../components/SliderRow';
-import type { EditState } from '../engine/editState';
+import type { AdjustKey, EditState } from '../engine/editState';
 import { PRESET_NAMES, PRESET_SHORT_LABELS, presetThumbBackground } from '../engine/presets';
 import { useUndoableEditState } from '../hooks/useUndoableEditState';
 import { recordFirstEditIfNeeded } from '../lib/kpi';
 import { dark } from '../theme/colors';
+import { fonts } from '../theme/typography';
 
 /** Önizleme genişliği; yükseklik sekmeye göre tavanlanır (Adjust’ta biraz daha fazla panel kalır). */
 const PREVIEW_SIDE_PAD = 24;
+
+/** Skia karesinin GPU’ya çizilmesi için bir sonraki frame(ler)den sonra snapshot alınır */
+function waitPaintFrames(frames = 2): Promise<void> {
+  return new Promise((resolve) => {
+    let n = frames;
+    const step = () => {
+      n -= 1;
+      if (n <= 0) resolve();
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
 
 function computePreviewSize(
   iw: number,
@@ -117,20 +134,6 @@ type EditorTab = 'looks' | 'edit';
 type ExportQuality = 'hd' | 'raw' | '4k';
 type ExportAspect = 'original' | '9:16' | '1:1';
 type AdjustCategory = 'light' | 'color' | 'detail';
-type AdjustKey =
-  | 'exposure'
-  | 'contrast'
-  | 'temperature'
-  | 'pop'
-  | 'selectiveSkin'
-  | 'selectiveSky'
-  | 'selectiveGreen'
-  | 'selectiveWarm'
-  | 'saturation'
-  | 'sharpness'
-  | 'fade'
-  | 'vignette'
-  | 'grain';
 
 type Props = {
   imageUri: string;
@@ -200,11 +203,26 @@ const ADJUST_CONTROLS: {
   { category: 'detail', key: 'vignette', label: 'VIGNETTE', min: 0, max: 1, step: 0.02, format: formatDecimalUi },
 ];
 
+const ADJUST_SHORT_LABEL: Record<AdjustKey, string> = {
+  exposure: 'Exposure',
+  contrast: 'Contrast',
+  pop: 'Pop',
+  temperature: 'Warmth',
+  saturation: 'Saturation',
+  selectiveSkin: 'Skin',
+  selectiveSky: 'Sky',
+  selectiveGreen: 'Green',
+  selectiveWarm: 'Warm',
+  sharpness: 'Sharpness',
+  grain: 'Grain',
+  fade: 'Fade',
+  vignette: 'Vignette',
+};
+
 export function EditorScreen({ imageUri, onBack }: Props) {
   const { width: winW, height: winH } = useWindowDimensions();
   const screenH = Dimensions.get('screen').height;
   const topInset = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 6 : 44;
-  const panelHeight = Math.max(168, Math.min(236, Math.round(winH * 0.225)));
   const previewMaxW = winW - PREVIEW_SIDE_PAD;
   const previewMaxH = Math.round(winH * 0.58);
   const canvasRef = useCanvasRef();
@@ -231,6 +249,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   const [imageDims, setImageDims] = useState<{ width: number; height: number } | null>(null);
   const [activeCategory, setActiveCategory] = useState<AdjustCategory>('light');
   const [activeAdjust, setActiveAdjust] = useState<AdjustKey>('exposure');
+  const adjustToolsScrollRef = useRef<ScrollView>(null);
   const navBarInset = Math.max(0, screenH - winH);
   /** Pencere–ekran farkı bazen üst çentiği de içerir; alt tab bar’da aşırı boşluk oluşmasın diye tavanlı */
   const bottomNavPad = 6 + Math.min(Math.max(navBarInset, 4), 32);
@@ -249,6 +268,33 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     return computePreviewSize(imageDims.width, imageDims.height, previewMaxW, previewMaxH);
   }, [imageDims, previewMaxH, previewMaxW]);
 
+  const showEditorOverflowMenu = useCallback(() => {
+    const runUndo = () => {
+      if (canUndo) undo();
+    };
+    const runRedo = () => {
+      if (canRedo) redo();
+    };
+    if (Platform.OS === 'ios') {
+      const opts = ['İptal'];
+      if (canUndo) opts.push('Geri al');
+      if (canRedo) opts.push('Yinele');
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: opts, cancelButtonIndex: 0, userInterfaceStyle: 'dark' },
+        (idx) => {
+          if (opts[idx] === 'Geri al') runUndo();
+          if (opts[idx] === 'Yinele') runRedo();
+        },
+      );
+    } else {
+      const actions: { text: string; onPress?: () => void; style?: 'cancel' }[] = [];
+      if (canUndo) actions.push({ text: 'Geri al', onPress: runUndo });
+      if (canRedo) actions.push({ text: 'Yinele', onPress: runRedo });
+      actions.push({ text: 'Kapat', style: 'cancel' });
+      Alert.alert('Menü', undefined, actions);
+    }
+  }, [canRedo, canUndo, redo, undo]);
+
   const touchEdit = useCallback(() => {
     void recordFirstEditIfNeeded();
   }, []);
@@ -257,6 +303,15 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     () => ADJUST_CONTROLS.filter((c) => c.category === activeCategory),
     [activeCategory],
   );
+
+  /** LIGHT/COLOR/DETAIL arasında yatay ScrollView aynı örnek kalınca eski contentOffset “sola kaymış” görünür; sıfırla. */
+  useLayoutEffect(() => {
+    if (editorTab !== 'edit') return;
+    const id = requestAnimationFrame(() => {
+      adjustToolsScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editorTab, activeCategory]);
 
   useEffect(() => {
     if (!controlsInCategory.some((c) => c.key === activeAdjust)) {
@@ -311,6 +366,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
         previewSize.w,
         previewSize.h,
       );
+      await waitPaintFrames(2);
       const snap = canvasRef.current?.makeImageSnapshot(cropRect);
       if (!snap) {
         Alert.alert('Dışa aktarma', 'Görüntü oluşturulamadı. Tekrar deneyin.');
@@ -362,10 +418,22 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     }
   }, [canvasRef, exportAspect, imageDims?.height, imageDims?.width, jpegQuality, previewSize.h, previewSize.w]);
 
-  const setTab = (t: EditorTab) => setEditorTab(t);
+  const setTab = (t: EditorTab) => {
+    setCompare(false);
+    setEditorTab(t);
+  };
 
-  useEffect(() => {
-    if (!exportOpen) return;
+  useLayoutEffect(() => {
+    if (!exportOpen) {
+      setExportPreviewUri(null);
+      setExportPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setExportPreviewLoading(true);
+    setExportPreviewUri(null);
+
     const srcW = imageDims?.width ?? previewSize.w;
     const srcH = imageDims?.height ?? previewSize.h;
     const containRect = computeContainRect(srcW, srcH, previewSize.w, previewSize.h);
@@ -374,81 +442,134 @@ export function EditorScreen({ imageUri, onBack }: Props) {
       previewSize.w,
       previewSize.h,
     );
-    const snap = canvasRef.current?.makeImageSnapshot(cropRect);
-    if (!snap) {
-      setExportPreviewUri(null);
-      return;
-    }
-    setExportPreviewLoading(true);
-    try {
-      const base64 = snap.encodeToBase64(ImageFormat.JPEG, 78);
-      setExportPreviewUri(`data:image/jpeg;base64,${base64}`);
-    } finally {
-      setExportPreviewLoading(false);
-    }
+
+    void waitPaintFrames(2).then(() => {
+      if (cancelled) return;
+      const snap = canvasRef.current?.makeImageSnapshot(cropRect);
+      if (cancelled) return;
+      if (!snap) {
+        setExportPreviewUri(null);
+        setExportPreviewLoading(false);
+        return;
+      }
+      try {
+        const base64 = snap.encodeToBase64(ImageFormat.JPEG, 78);
+        setExportPreviewUri(`data:image/jpeg;base64,${base64}`);
+      } finally {
+        if (!cancelled) setExportPreviewLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [canvasRef, current, exportAspect, exportOpen, imageDims?.height, imageDims?.width, previewSize.h, previewSize.w]);
 
   return (
     <View style={styles.root}>
       <View style={[styles.toolbar, { paddingTop: topInset }]}>
-        <Pressable onPress={onBack} style={styles.toolIcon} accessibilityLabel="Geri">
-          <Text style={styles.toolIconText}>←</Text>
-        </Pressable>
-        <Pressable
-          onPress={undo}
-          disabled={!canUndo}
-          style={[styles.toolIcon, !canUndo && styles.disabled]}
-          accessibilityLabel="Geri al"
-        >
-          <Text style={styles.toolIconText}>↺</Text>
-        </Pressable>
-        <Pressable
-          onPress={redo}
-          disabled={!canRedo}
-          style={[styles.toolIcon, !canRedo && styles.disabled]}
-          accessibilityLabel="Yinele"
-        >
-          <Text style={styles.toolIconText}>↻</Text>
-        </Pressable>
+        <View style={styles.toolbarSide}>
+          <Pressable
+            onPress={onBack}
+            onLongPress={showEditorOverflowMenu}
+            delayLongPress={420}
+            style={styles.toolIcon}
+            accessibilityLabel="Düzenleyiciden çık; uzun bas: geri al menüsü"
+          >
+            <View style={styles.menuIcon} accessibilityIgnoresInvertColors>
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+            </View>
+          </Pressable>
+        </View>
         <Text style={styles.brandTitle} pointerEvents="none">
-          LUMERIS
+          Lumeris
         </Text>
-        <View style={{ flex: 1 }} />
+        <View style={[styles.toolbarSide, styles.toolbarSideRight]}>
+          <Pressable
+            onPress={() => setExportOpen(true)}
+            style={styles.toolbarExport}
+            accessibilityLabel="Export"
+          >
+            <Text style={styles.toolbarExportText}>Export</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.body}>
         <View style={[styles.previewSlot, isLandscapeImage && styles.previewSlotLandscape]}>
-          <Pressable
-            accessibilityRole="imagebutton"
-            accessibilityHint="Basılı tutarak orijinali gösterir"
-            onPressIn={() => setCompare(true)}
-            onPressOut={() => setCompare(false)}
-            style={[styles.previewCard, { width: previewSize.w }]}
-          >
-            <EditorCanvas
-              uri={imageUri}
-              state={current}
-              compare={compare}
-              width={previewSize.w}
-              height={previewSize.h}
-              canvasRef={canvasRef}
-            />
-            <Text style={styles.compareHint}>Basılı tut — karşılaştır</Text>
-            {imageDims ? (
-              <View style={styles.resBadge}>
-                <Text style={styles.resBadgeText}>
-                  {imageDims.width} × {imageDims.height}
-                </Text>
-              </View>
-            ) : null}
-          </Pressable>
+          <View style={[styles.previewCard, { width: previewSize.w, height: previewSize.h }]}>
+            {editorTab === 'looks' ? (
+              <Pressable
+                accessibilityRole="imagebutton"
+                accessibilityHint="Basılı tutarak orijinal (ham) görüntüyü gösterir"
+                onPressIn={() => setCompare(true)}
+                onPressOut={() => setCompare(false)}
+                style={styles.previewTouchLayer}
+              >
+                <EditorCanvas
+                  uri={imageUri}
+                  state={current}
+                  compareBefore={compare}
+                  width={previewSize.w}
+                  height={previewSize.h}
+                  canvasRef={canvasRef}
+                />
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  {!compare ? (
+                    <View style={styles.beforePillWrap}>
+                      <Text style={styles.beforePill}>LOOK</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="imagebutton"
+                accessibilityHint="Basılı tutarak orijinal (ham) görüntüyü gösterir"
+                onPressIn={() => setCompare(true)}
+                onPressOut={() => setCompare(false)}
+                style={styles.previewTouchLayer}
+              >
+                <EditorCanvas
+                  uri={imageUri}
+                  state={current}
+                  compareBefore={compare}
+                  width={previewSize.w}
+                  height={previewSize.h}
+                  canvasRef={canvasRef}
+                />
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  {!compare ? (
+                    <View style={styles.beforePillWrap}>
+                      <Text style={styles.beforePill}>HAZIR</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            )}
+          </View>
         </View>
-        <View style={[styles.panel, { height: panelHeight }]}>
-          <View style={styles.panelBody}>
+        <View style={[styles.unifiedSheet, { paddingBottom: bottomNavPad, maxHeight: Math.round(winH * 0.52) }]}>
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
             {editorTab === 'looks' ? (
               <>
+                <View style={styles.looksPresetMetaRow}>
+                  <Text style={styles.looksPresetMetaLeft} numberOfLines={1}>
+                    PRESETS: DEEP MOSS COLLECTION
+                  </Text>
+                  <Text style={styles.looksPresetMetaRight}>{`${PRESET_NAMES.length} LOOKS AVAILABLE`}</Text>
+                </View>
                 <ScrollView
                   horizontal
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.presetStrip}
@@ -472,6 +593,11 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                             on && styles.presetTileInnerOn,
                           ]}
                         >
+                          {on ? (
+                            <View style={styles.presetSelectedBadge}>
+                              <View style={styles.presetSelectedCheckMark} />
+                            </View>
+                          ) : null}
                           <Text style={styles.presetTileLabel}>{PRESET_SHORT_LABELS[idx]}</Text>
                         </View>
                         <Text style={[styles.presetName, on && styles.presetNameOn]} numberOfLines={1}>
@@ -491,6 +617,9 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                       max={100}
                       step={1}
                       sliderRemountKey={`intensity-${current.presetIndex}`}
+                      thumbTintColor={dark.accentOrganic}
+                      minimumTrackTintColor={dark.primaryContainer}
+                      maximumTrackTintColor={dark.surfaceBright}
                       format={(v) => `${Math.round(v)}`}
                       onChange={(v) => update((c) => ({ ...c, presetIntensity: v }))}
                       onSlidingStart={() => {
@@ -522,21 +651,32 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                   })}
                 </View>
                 <ScrollView
+                  ref={adjustToolsScrollRef}
                   horizontal
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={styles.adjustChipRow}
+                  style={styles.adjustToolsScroll}
+                  contentContainerStyle={styles.adjustToolStrip}
                 >
-                  {controlsInCategory.map((control) => {
-                    const isOn = control.key === activeAdjust;
+                  {controlsInCategory.map((def) => {
+                    const isOn = activeAdjust === def.key;
+                    const iconColor = isOn ? dark.accentOrganic : dark.text;
                     return (
                       <Pressable
-                        key={control.key}
-                        style={[styles.adjustChip, isOn && styles.adjustChipOn]}
-                        onPress={() => setActiveAdjust(control.key)}
+                        key={def.key}
+                        style={styles.adjustIconCell}
+                        onPress={() => {
+                          touchEdit();
+                          setActiveAdjust(def.key);
+                        }}
+                        accessibilityLabel={def.label}
                       >
-                        <Text style={[styles.adjustChipText, isOn && styles.adjustChipTextOn]}>
-                          {control.label}
+                        <View style={[styles.adjustIconRing, isOn && styles.adjustIconRingOn]}>
+                          <AdjustToolGlyph tool={def.key} color={iconColor} size={26} />
+                        </View>
+                        <Text style={[styles.adjustIconLabel, isOn && styles.adjustIconLabelOn]} numberOfLines={2}>
+                          {ADJUST_SHORT_LABEL[def.key]}
                         </Text>
                       </Pressable>
                     );
@@ -551,6 +691,9 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                   step={activeControl.step}
                   format={activeControl.format}
                   sliderRemountKey={`${activeCategory}-${activeControl.key}`}
+                  thumbTintColor={dark.accentOrganic}
+                  minimumTrackTintColor={dark.primaryContainer}
+                  maximumTrackTintColor={dark.surfaceBright}
                   onChange={(v) => updateAdjustValue(activeControl.key, v)}
                   onSlidingStart={() => {
                     beginGesture();
@@ -560,33 +703,33 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                 />
               </>
             )}
+          </ScrollView>
+          <View style={styles.sheetNavDivider} />
+          <View style={styles.sheetNavRow}>
+            <Pressable
+              style={[styles.navCell, editorTab === 'looks' && styles.navCellOn]}
+              onPress={() => setTab('looks')}
+              accessibilityLabel="Looks"
+            >
+              <LooksFlowerGlyph
+                color={editorTab === 'looks' ? dark.accentOrganic : dark.textMuted}
+                size={22}
+              />
+              <Text style={[styles.navLabel, editorTab === 'looks' && styles.navLabelOn]}>Looks</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.navCell, editorTab === 'edit' && styles.navCellOn]}
+              onPress={() => setTab('edit')}
+              accessibilityLabel="Adjust"
+            >
+              <SlidersNavGlyph
+                color={editorTab === 'edit' ? dark.onPrimaryContainer : dark.textMuted}
+                active={editorTab === 'edit'}
+                size={20}
+              />
+              <Text style={[styles.navLabel, editorTab === 'edit' && styles.navLabelOn]}>Adjust</Text>
+            </Pressable>
           </View>
-        </View>
-        <View style={[styles.bottomNav, { paddingBottom: bottomNavPad }]}>
-          <Pressable
-            style={[styles.navCell, editorTab === 'looks' && styles.navCellOn]}
-            onPress={() => setTab('looks')}
-            accessibilityLabel="Looks"
-          >
-            <Text style={styles.navIcon}>✦</Text>
-            <Text style={[styles.navLabel, editorTab === 'looks' && styles.navLabelOn]}>LOOKS</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.navCell, editorTab === 'edit' && styles.navCellOn]}
-            onPress={() => setTab('edit')}
-            accessibilityLabel="Edit"
-          >
-            <Text style={styles.navIcon}>≡</Text>
-            <Text style={[styles.navLabel, editorTab === 'edit' && styles.navLabelOn]}>EDIT</Text>
-          </Pressable>
-          <Pressable
-            style={styles.navCell}
-            onPress={() => setExportOpen(true)}
-            accessibilityLabel="Export"
-          >
-            <Text style={styles.navIcon}>⇪</Text>
-            <Text style={styles.navLabel}>EXPORT</Text>
-          </Pressable>
         </View>
       </View>
 
@@ -597,15 +740,17 @@ export function EditorScreen({ imageUri, onBack }: Props) {
               <Pressable onPress={() => setExportOpen(false)} accessibilityLabel="Kapat">
                 <Text style={styles.modalClose}>✕</Text>
               </Pressable>
-              <Text style={styles.modalBrand}>LUMERIS</Text>
+              <Text style={styles.modalBrand}>Lumeris</Text>
               <View style={{ width: 28 }} />
             </View>
 
-            <Image
-              source={{ uri: exportPreviewUri ?? imageUri }}
-              style={styles.modalPreview}
-              resizeMode="contain"
-            />
+            {exportPreviewUri ? (
+              <Image source={{ uri: exportPreviewUri }} style={styles.modalPreview} resizeMode="contain" />
+            ) : (
+              <View style={[styles.modalPreview, styles.modalPreviewLoadingBox]}>
+                <ActivityIndicator color={dark.primary} size="large" />
+              </View>
+            )}
             {exportPreviewLoading ? <Text style={styles.modalPreviewHint}>Önizleme hazırlanıyor…</Text> : null}
 
             <Text style={styles.modalSectionLabel}>KALİTE</Text>
@@ -679,24 +824,48 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: 12,
-    paddingBottom: 10,
-    paddingHorizontal: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 14,
     backgroundColor: dark.bg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: dark.border,
   },
-  toolIcon: { paddingHorizontal: 8, paddingVertical: 6 },
-  toolIconText: { color: dark.text, fontSize: 20, fontWeight: '600' },
+  toolbarSide: {
+    width: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  toolbarSideRight: {
+    justifyContent: 'flex-end',
+  },
+  toolbarExport: {
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  toolbarExportText: {
+    color: dark.text,
+    fontSize: 15,
+    fontFamily: fonts.medium,
+    letterSpacing: 0.2,
+  },
+  toolIcon: { paddingHorizontal: 4, paddingVertical: 6 },
+  menuIcon: { flexDirection: 'column', justifyContent: 'center', gap: 4, paddingVertical: 2 },
+  menuLine: {
+    width: 18,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: dark.text,
+  },
   brandTitle: {
     position: 'absolute',
     left: 0,
     right: 0,
     textAlign: 'center',
     color: dark.text,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 3,
+    fontSize: 17,
+    fontFamily: fonts.semiBold,
+    letterSpacing: 0.2,
   },
   disabled: { opacity: 0.35 },
   body: { flex: 1 },
@@ -712,66 +881,161 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewCard: {
-    marginHorizontal: 12,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: dark.canvas,
     alignSelf: 'center',
   },
-  compareHint: {
-    position: 'absolute',
-    bottom: 10,
-    alignSelf: 'center',
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 11,
-    letterSpacing: 0.3,
+  previewTouchLayer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
-  resBadge: {
+  beforePillWrap: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    top: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  beforePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    letterSpacing: 1.2,
   },
-  resBadgeText: { color: dark.text, fontSize: 11, fontWeight: '600' },
-  panel: {
+  unifiedSheet: {
     flexShrink: 0,
-    minHeight: 156,
-    marginTop: 6,
-    backgroundColor: dark.surface,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderColor: dark.border,
+    marginTop: 2,
+    backgroundColor: dark.bgElevated,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.divider,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -2 },
+      },
+      android: { elevation: 4 },
+    }),
   },
-  panelBody: {
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetScrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  sheetNavDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: dark.divider,
+    marginHorizontal: 16,
+    opacity: 1,
+  },
+  sheetNavRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 6,
+    paddingTop: 4,
+    paddingBottom: 2,
+    gap: 6,
+    alignItems: 'center',
   },
   categoryRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 10,
+    marginTop: 12,
   },
   categoryChip: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: dark.border,
-    backgroundColor: dark.bgElevated,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
   },
   categoryChipOn: {
-    borderColor: dark.accent,
-    backgroundColor: dark.surfaceMuted,
+    borderWidth: 0,
+    backgroundColor: 'rgba(62, 75, 67, 0.55)',
   },
-  categoryChipText: { color: dark.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  categoryChipTextOn: { color: dark.accent },
+  categoryChipText: {
+    color: dark.textMuted,
+    fontSize: 11,
+    fontFamily: fonts.semiBold,
+    letterSpacing: 0.5,
+  },
+  categoryChipTextOn: { color: dark.onPrimaryContainer },
+  looksPresetMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 12,
+  },
+  looksPresetMetaLeft: {
+    flex: 1,
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    letterSpacing: 1.3,
+    color: dark.textMuted,
+  },
+  looksPresetMetaRight: {
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    letterSpacing: 1,
+    color: dark.textMuted,
+  },
+  adjustToolsScroll: {
+    flexGrow: 0,
+  },
+  adjustToolStrip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 12,
+  },
+  adjustIconCell: {
+    minWidth: 58,
+    maxWidth: 76,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  adjustIconRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  adjustIconRingOn: {
+    borderColor: 'rgba(132,165,157,0.55)',
+    backgroundColor: 'rgba(62,75,67,0.35)',
+  },
+  adjustIconLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: dark.textMuted,
+    textAlign: 'center',
+  },
+  adjustIconLabelOn: {
+    color: dark.accentOrganic,
+    fontFamily: fonts.bold,
+  },
   presetStrip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -789,13 +1053,39 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
+    overflow: 'visible',
   },
   presetTileInnerOn: {
-    borderColor: dark.accent,
-    shadowColor: dark.accent,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
+    borderWidth: 2,
+    borderColor: dark.accentOrganic,
+    shadowColor: dark.accentOrganic,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+  },
+  presetSelectedBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: dark.accentOrganic,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(9,16,12,0.35)',
+  },
+  presetSelectedCheckMark: {
+    width: 5,
+    height: 9,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: dark.onPrimary,
+    transform: [{ rotate: '45deg' }],
+    marginTop: -3,
+    marginLeft: -1,
   },
   presetName: {
     marginTop: 6,
@@ -804,30 +1094,8 @@ const styles = StyleSheet.create({
     maxWidth: 64,
     textAlign: 'center',
   },
-  presetNameOn: { color: dark.accent, fontWeight: '700' },
+  presetNameOn: { color: dark.onPrimaryContainer, fontFamily: fonts.bold },
   presetTileLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  adjustChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingBottom: 8,
-    paddingTop: 2,
-    paddingRight: 10,
-  },
-  adjustChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: dark.border,
-    backgroundColor: dark.bgElevated,
-  },
-  adjustChipOn: {
-    borderColor: dark.accent,
-    backgroundColor: dark.surfaceMuted,
-  },
-  adjustChipText: { color: dark.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  adjustChipTextOn: { color: dark.accent },
   looksIntensitySlot: {
     minHeight: 80,
     justifyContent: 'center',
@@ -838,30 +1106,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.3,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingTop: 4,
-    gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: dark.border,
-    backgroundColor: dark.surface,
-  },
   navCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: dark.bgElevated,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: 'transparent',
   },
   navCellOn: {
-    backgroundColor: dark.surfaceMuted,
-    borderWidth: 1,
-    borderColor: dark.accentMuted,
+    backgroundColor: 'rgba(62, 75, 67, 0.45)',
+    borderWidth: 0,
   },
-  navIcon: { fontSize: 18, color: dark.text, marginBottom: 2 },
-  navLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: dark.textMuted },
-  navLabelOn: { color: dark.accent },
+  navLabel: {
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    letterSpacing: 1.2,
+    color: dark.textMuted,
+    marginTop: 4,
+  },
+  navLabelOn: { color: dark.accentOrganic },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -875,6 +1138,8 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingTop: 12,
     maxHeight: '88%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.divider,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -883,13 +1148,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalClose: { color: dark.textMuted, fontSize: 18, padding: 8 },
-  modalBrand: { color: dark.text, fontSize: 13, fontWeight: '800', letterSpacing: 3 },
+  modalBrand: { color: dark.text, fontSize: 16, fontFamily: fonts.semiBold, letterSpacing: 0.2 },
   modalPreview: {
     width: '100%',
     height: 160,
     borderRadius: 14,
     backgroundColor: dark.canvas,
     marginBottom: 16,
+  },
+  modalPreviewLoadingBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalPreviewHint: {
     marginTop: -10,
@@ -899,7 +1168,7 @@ const styles = StyleSheet.create({
   },
   modalSectionLabel: {
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: 1.4,
     color: dark.textMuted,
     marginBottom: 8,
@@ -908,27 +1177,27 @@ const styles = StyleSheet.create({
   segment: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: dark.surface,
+    borderRadius: 14,
+    backgroundColor: 'rgba(26, 33, 29, 0.55)',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
   segmentOn: {
-    backgroundColor: dark.accent,
-    borderColor: dark.accent,
+    backgroundColor: dark.primary,
+    borderColor: dark.primary,
   },
-  segmentText: { fontSize: 13, fontWeight: '700', color: dark.textMuted },
-  segmentTextOn: { color: dark.bg },
+  segmentText: { fontSize: 13, fontFamily: fonts.bold, color: dark.textMuted },
+  segmentTextOn: { color: dark.onPrimary },
   modalHint: { fontSize: 11, color: dark.textDim, marginBottom: 16, lineHeight: 16 },
   modalSave: {
-    backgroundColor: dark.accent,
+    backgroundColor: dark.primary,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: 16,
   },
-  modalSaveText: { color: dark.bg, fontSize: 16, fontWeight: '800' },
+  modalSaveText: { color: dark.onPrimary, fontSize: 16, fontFamily: fonts.bold },
   shareDivider: {
     textAlign: 'center',
     color: dark.textDim,
@@ -941,11 +1210,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: dark.surface,
+    backgroundColor: 'rgba(26, 33, 29, 0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
   shareDotText: { color: dark.text, fontSize: 16 },
 });

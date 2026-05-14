@@ -20,6 +20,7 @@ import { createDefaultWelcomeExperience, type WelcomeExperience } from '../data/
 import { getLumerisApiBaseUrl } from '../lib/apiBaseUrl';
 import { fetchWelcomeExperience } from '../lib/fetchExperience';
 import { dark } from '../theme/colors';
+import { fonts } from '../theme/typography';
 
 type HeroSource = { kind: 'remote'; uri: string } | { kind: 'local' };
 
@@ -103,13 +104,13 @@ export function WelcomeScreen({ onImageSelected }: Props) {
   );
 
   const openImagePicker = useCallback(async () => {
-      const cur = await ImagePicker.getMediaLibraryPermissionsAsync();
-      const curExt = cur as ImagePicker.MediaLibraryPermissionResponse;
-      const libOk = cur.granted || cur.status === 'granted' || curExt.accessPrivileges === 'limited';
-      if (!libOk) {
-        const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        const reqExt = req as ImagePicker.MediaLibraryPermissionResponse;
-        const reqOk = req.granted || req.status === 'granted' || reqExt.accessPrivileges === 'limited';
+    const cur = await ImagePicker.getMediaLibraryPermissionsAsync();
+    const curExt = cur as ImagePicker.MediaLibraryPermissionResponse;
+    const libOk = cur.granted || cur.status === 'granted' || curExt.accessPrivileges === 'limited';
+    if (!libOk) {
+      const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const reqExt = req as ImagePicker.MediaLibraryPermissionResponse;
+      const reqOk = req.granted || req.status === 'granted' || reqExt.accessPrivileges === 'limited';
       if (!reqOk) {
         Alert.alert('Galeri izni', 'Fotoğraf seçmek için galeri erişimine izin verin.');
         return;
@@ -195,7 +196,7 @@ export function WelcomeScreen({ onImageSelected }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.topBar}>
-        <Text style={styles.brand}>LUMERIS</Text>
+        <Text style={styles.brand}>Lumeris</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -216,7 +217,7 @@ export function WelcomeScreen({ onImageSelected }: Props) {
                 />
                 {!heroReady ? (
                   <View style={styles.heroPlaceholder}>
-                    <ActivityIndicator color={dark.accent} />
+                    <ActivityIndicator color={dark.primary} />
                   </View>
                 ) : null}
               </>
@@ -314,7 +315,7 @@ export function WelcomeScreen({ onImageSelected }: Props) {
         {perm === 'limited' && <Text style={styles.limited}>Sınırlı galeri erişimi</Text>}
 
         {loading ? (
-          <ActivityIndicator size="large" color={dark.accent} style={{ marginVertical: 20 }} />
+          <ActivityIndicator size="large" color={dark.primary} style={{ marginVertical: 20 }} />
         ) : (
           <View style={styles.masonry}>
             {largeThumb ? (
@@ -372,27 +373,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: 52,
     paddingBottom: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: dark.border,
+    borderBottomColor: dark.divider,
   },
-  brand: { color: dark.text, fontSize: 13, fontWeight: '800', letterSpacing: 3 },
+  brand: { color: dark.text, fontSize: 15, fontFamily: fonts.semiBold, letterSpacing: 0.4 },
   scroll: { paddingBottom: 32 },
   heroFrame: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: 26,
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOpacity: 0.45,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.22,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 10 },
       },
-      android: { elevation: 12 },
+      android: { elevation: 6 },
     }),
   },
   hero: {
@@ -407,11 +408,11 @@ const styles = StyleSheet.create({
     height: undefined,
   },
   heroOfflineRoot: {
-    backgroundColor: '#1a1726',
+    backgroundColor: dark.surface,
   },
   heroOfflineGlow: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(155,134,196,0.14)',
+    backgroundColor: 'rgba(227,213,202,0.08)',
   },
   heroOfflineBandTop: {
     position: 'absolute',
@@ -444,16 +445,17 @@ const styles = StyleSheet.create({
   heroOfflineBadgeText: {
     color: dark.text,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: 0.8,
   },
   heroOfflineNote: {
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     marginTop: 8,
     marginBottom: 2,
     textAlign: 'center',
     color: dark.textDim,
     fontSize: 12,
+    fontFamily: fonts.regular,
     lineHeight: 17,
   },
   heroPlaceholder: {
@@ -480,21 +482,22 @@ const styles = StyleSheet.create({
   },
   heroScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13,11,20,0.12)',
+    backgroundColor: 'rgba(8,14,11,0.18)',
   },
   heroTitle: {
     color: dark.text,
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: fonts.bold,
     marginBottom: 8,
-    letterSpacing: -0.6,
+    letterSpacing: 0.56,
     textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
   heroSub: {
-    color: 'rgba(245,242,255,0.88)',
+    color: 'rgba(242,233,228,0.92)',
     fontSize: 14,
+    fontFamily: fonts.regular,
     lineHeight: 21,
     marginBottom: 16,
     textShadowColor: 'rgba(0,0,0,0.45)',
@@ -502,127 +505,148 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   heroCta: {
-    backgroundColor: dark.accent,
+    backgroundColor: dark.primary,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 24,
     alignItems: 'center',
     shadowColor: dark.accentGlow,
     shadowOpacity: 1,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 0 },
   },
-  heroCtaText: { color: dark.bg, fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
-  sectionLabel: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 8,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.6,
-    color: dark.textDim,
+  heroCtaText: {
+    color: dark.onPrimary,
+    fontSize: 15,
+    fontFamily: fonts.bold,
+    letterSpacing: 0.5,
   },
-  pillarRow: { gap: 10, paddingHorizontal: 16, paddingBottom: 4 },
+  sectionLabel: {
+    marginHorizontal: 20,
+    marginTop: 22,
+    marginBottom: 10,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    letterSpacing: 1.4,
+    color: dark.textMuted,
+  },
+  pillarRow: { gap: 12, paddingHorizontal: 20, paddingBottom: 4 },
   pillarCard: {
     width: 200,
-    padding: 14,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 18,
     backgroundColor: dark.surface,
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
-  pillarIcon: { fontSize: 20, color: dark.accent, marginBottom: 8 },
-  pillarTitle: { color: dark.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
-  pillarSub: { color: dark.textMuted, fontSize: 11, lineHeight: 15 },
+  pillarIcon: { fontSize: 20, color: dark.accentOrganic, marginBottom: 8 },
+  pillarTitle: {
+    color: dark.text,
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    marginBottom: 4,
+  },
+  pillarSub: {
+    color: dark.textMuted,
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    lineHeight: 15,
+  },
   tagline: {
-    marginHorizontal: 16,
-    marginTop: 6,
+    marginHorizontal: 20,
+    marginTop: 8,
     marginBottom: 4,
     fontSize: 12,
     lineHeight: 17,
     color: dark.textMuted,
+    fontFamily: fonts.regular,
     fontStyle: 'italic',
   },
   spotlight: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: dark.accentMuted,
-    backgroundColor: dark.surfaceMuted,
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 0,
+    backgroundColor: 'rgba(22, 29, 25, 0.72)',
   },
   spotBadge: {
     alignSelf: 'flex-start',
-    color: dark.bg,
-    backgroundColor: dark.accent,
+    color: dark.onPrimary,
+    backgroundColor: dark.primary,
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: 1,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
     marginBottom: 8,
     overflow: 'hidden',
   },
-  spotTitle: { color: dark.text, fontSize: 17, fontWeight: '800', marginBottom: 6 },
-  spotBody: { color: dark.textMuted, fontSize: 12, lineHeight: 17 },
+  spotTitle: { color: dark.text, fontSize: 17, fontFamily: fonts.bold, marginBottom: 6 },
+  spotBody: {
+    color: dark.textMuted,
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    lineHeight: 17,
+  },
   permCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 14,
-    padding: 14,
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 16,
     backgroundColor: dark.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
   permIcon: { fontSize: 22, marginRight: 12 },
   permMid: { flex: 1 },
-  permTitle: { color: dark.text, fontSize: 15, fontWeight: '700' },
-  permSub: { color: dark.textMuted, fontSize: 12, marginTop: 2 },
+  permTitle: { color: dark.text, fontSize: 15, fontFamily: fonts.semiBold },
+  permSub: { color: dark.textMuted, fontSize: 12, fontFamily: fonts.regular, marginTop: 2 },
   permExpoHint: {
     color: dark.textDim,
     fontSize: 10,
+    fontFamily: fonts.regular,
     lineHeight: 14,
     marginTop: 6,
   },
-  permAction: { color: dark.accent, fontSize: 14, fontWeight: '700' },
-  permOk: { color: dark.textMuted, fontSize: 13, fontWeight: '600' },
+  permAction: { color: dark.accentOrganic, fontSize: 14, fontFamily: fonts.bold },
+  permOk: { color: dark.textMuted, fontSize: 13, fontFamily: fonts.semiBold },
   banner: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    backgroundColor: dark.surfaceMuted,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: dark.border,
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 16,
+    backgroundColor: 'rgba(22, 29, 25, 0.85)',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
-  bannerText: { color: dark.text, fontSize: 13, marginBottom: 10 },
+  bannerText: { color: dark.text, fontSize: 13, fontFamily: fonts.regular, marginBottom: 10 },
   bannerRow: { flexDirection: 'row', gap: 10 },
   bannerBtn: {
     flex: 1,
-    backgroundColor: dark.accent,
-    paddingVertical: 10,
-    borderRadius: 10,
+    backgroundColor: dark.primary,
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: 'center',
   },
-  bannerBtnText: { color: dark.bg, fontWeight: '700' },
+  bannerBtnText: { color: dark.onPrimary, fontFamily: fonts.bold },
   bannerBtnGhost: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
-  bannerBtnGhostText: { color: dark.text, fontWeight: '600' },
-  limited: { marginHorizontal: 16, marginTop: 10, fontSize: 12, color: dark.textMuted },
-  masonry: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  bannerBtnGhostText: { color: dark.text, fontFamily: fonts.semiBold },
+  limited: { marginHorizontal: 20, marginTop: 10, fontSize: 12, color: dark.textMuted, fontFamily: fonts.regular },
+  masonry: { paddingHorizontal: 20, gap: 10, paddingBottom: 4 },
   heroThumbWrap: {
     width: '100%',
     height: 160,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: dark.canvas,
   },
@@ -635,31 +659,54 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: dark.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
   gridImg: { width: '100%', height: '100%' },
   placeholder: { alignItems: 'center', justifyContent: 'center', padding: 16 },
-  placeholderText: { color: dark.textMuted, textAlign: 'center', fontSize: 13 },
-  placeholderSmall: { backgroundColor: dark.surfaceMuted, borderWidth: 1, borderColor: dark.border },
+  placeholderText: {
+    color: dark.textMuted,
+    textAlign: 'center',
+    fontSize: 13,
+    fontFamily: fonts.regular,
+  },
+  placeholderSmall: {
+    backgroundColor: dark.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
+  },
   tipsRow: {
     flexDirection: 'row',
     gap: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 8,
     alignItems: 'stretch',
   },
   tipCard: {
-    padding: 12,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 18,
     backgroundColor: dark.surface,
-    borderWidth: 1,
-    borderColor: dark.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
   },
-  tipTitle: { color: dark.text, fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  tipBody: { color: dark.textMuted, fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  tipTitle: {
+    color: dark.text,
+    fontSize: 13,
+    fontFamily: fonts.semiBold,
+    marginBottom: 6,
+  },
+  tipBody: {
+    color: dark.textMuted,
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    lineHeight: 16,
+    flexShrink: 1,
+  },
   version: {
     textAlign: 'center',
     color: dark.textDim,
     fontSize: 10,
+    fontFamily: fonts.regular,
     marginTop: 12,
     marginBottom: 20,
     letterSpacing: 0.5,
