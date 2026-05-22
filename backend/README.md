@@ -1,6 +1,6 @@
 # Lumeris Backend
 
-FastAPI servisi; mobil uygulama (`mobile/`) ile ayrı çalışır. Ürün görüntüleri cihazda işler (**zero-server**); bu API meta, istemci ipuçları, ön ayar kataloğu ve **karşılama deneyimi** (ipuçları, vitrin) gibi **fotoğraf içermeyen** uçları sunar.
+FastAPI servisi; istemci uygulaması (`frontend/`) ile ayrı çalışır. Ürün görüntüleri cihazda işler (**zero-server**); bu API meta, istemci ipuçları, ön ayar kataloğu ve **karşılama deneyimi** (ipuçları, vitrin) gibi **fotoğraf içermeyen** uçları sunar.
 
 ## Kurulum ve çalıştırma
 
@@ -38,9 +38,9 @@ Varsayılan adres: `http://localhost:3001`
 | `GET` | `/health` | Sağlık kontrolü (`status`, `timestamp`) |
 | `GET` | `/api/v1/meta` | Servis ve API sürüm bilgisi |
 | `GET` | `/api/v1/config` | İstemci için bakım / minimum sürüm ipuçları |
-| `GET` | `/api/v1/presets` | Ön ayar listesi (`index`, `short_label`, `display_name`) — `mobile/src/engine/presets.ts` ile senkron tutulmalı |
+| `GET` | `/api/v1/presets` | Ön ayar listesi (`index`, `short_label`, `display_name`) — `frontend/src/engine/presets.ts` ile senkron tutulmalı |
 | `GET` | `/api/v1/experience` | Karşılama için ipuçları, vitrin ön ayarı, ürün sütunları ve kısa slogan (JSON) |
 
-Mobil (`mobile/`) karşılama ekranı `GET /api/v1/experience` ile aynı yapıyı isteğe bağlı çeker. `mobile/app.json` → `extra.lumerisApiBaseUrl`: Android emülatör için örnek `http://10.0.2.2:3001`, iOS simülatör için `http://127.0.0.1:3001`, fiziksel cihaz için bilgisayarın LAN IP’si. Boşsa uygulama yerleşik varsayılan metinleri kullanır.
+İstemci (`frontend/`) karşılama ekranı `GET /api/v1/experience` ile aynı yapıyı isteğe bağlı çeker. `frontend/app.json` → `extra.lumerisApiBaseUrl`: Android emülatör için örnek `http://10.0.2.2:3001`, iOS simülatör için `http://127.0.0.1:3001`, fiziksel cihaz için bilgisayarın LAN IP’si. Boşsa uygulama yerleşik varsayılan metinleri kullanır.
 
 OpenAPI: `http://localhost:3001/docs` ve `http://localhost:3001/redoc`

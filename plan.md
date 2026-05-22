@@ -29,9 +29,9 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 
 ## 4) Mevcut durum notu
 
-- Şu an proje içinde çalışan uygulama `mobile/` dizininde ayrı bir Expo mobil servisi olarak bulunuyor
+- Şu an proje içinde çalışan uygulama `frontend/` dizininde ayrı bir Expo istemci servisi olarak bulunuyor
 - Bu yapı ürün mantığı açısından tutarlı, çünkü MVP zaten zero-server olarak tasarlandı
-- `backend/` ve `mobile/` dizinleri görünür şekilde ayrıldı
+- `backend/` ve `frontend/` dizinleri görünür şekilde ayrıldı
 - Backend minimum iskelet (`/health`) ile hazır
 
 ## 5) Faz bazlı çalışma planı
@@ -41,18 +41,18 @@ Bu dosya, projedeki dağınık notları tek bir uygulama planında toplar. Amaç
 - Dokümantasyon dosyaları oluşturuldu (`docs/TECH_FOUNDATION.md`, `docs/PRIVACY.md`, `docs/STORE_READINESS.md`)
 
 Kısa test:
-- `cd mobile`
+- `cd frontend`
 - `npm install`
 - `npx expo start`
 
 ## Faz 1 - Servis ayrımı ve başlangıç kurulumu (ilk sıradaki iş)
-- Mevcut mobil uygulamayı `mobile/` adıyla konumlandır
+- Mevcut istemci uygulamasını `frontend/` adıyla konumlandır
 - Ayrı bir `backend/` dizini oluştur
 - Backend için minimum çalışan bir servis iskeleti kur
 - Bu backend ilk aşamada fotoğraf işleme yapmak zorunda değil; amaç servis ayrımını göstermek
 
 Kısa test:
-- Repo kökünde `mobile/` ve `backend/` dizinleri görünmeli
+- Repo kökünde `frontend/` ve `backend/` dizinleri görünmeli
 - Her iki servisin de ayrı çalıştırma komutu olmalı
 
 Durum:

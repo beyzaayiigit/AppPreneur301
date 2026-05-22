@@ -15,7 +15,7 @@ Yani ek bir sunucu veya backend olmadan, ilk ekran projenin cihazda çalıştı�
 ## Çalıştırma
 
 ```bash
-cd mobile
+cd frontend
 npm install
 npx expo start
 ```

@@ -1,5 +1,5 @@
 """
-Preset display metadata aligned with mobile/src/engine/presets.ts.
+Preset display metadata aligned with frontend/src/engine/presets.ts.
 Update both when adding or renaming presets.
 """
 
