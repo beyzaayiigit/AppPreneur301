@@ -41,6 +41,7 @@ class RootResponse(BaseModel):
     health: str
     api_v1: str
     experience: str = Field(description="Curated tips, pillars, and spotlight for the welcome experience")
+    suggest_styles: str = Field(description="Style Triad AI endpoint")
 
 
 class TipItem(BaseModel):
@@ -62,6 +63,10 @@ class Spotlight(BaseModel):
     badge: str
     title: str
     body: str
+    cycle_label: str = Field(
+        default="",
+        description="Haftalık vitrin döngüsü açıklaması (ör. 15 görünüm, 7 günde bir)",
+    )
 
 
 class ExperienceResponse(BaseModel):
@@ -70,3 +75,53 @@ class ExperienceResponse(BaseModel):
     spotlight: Spotlight
     tagline: str
     refreshed_at: str
+
+
+class EditRecipeResponse(BaseModel):
+    """Edit recipe aligned with frontend EditState (snake_case API)."""
+
+    preset_index: int = Field(ge=0, le=15)
+    preset_intensity: float = Field(ge=0, le=100)
+    exposure: float = Field(ge=-2, le=2)
+    contrast: float = Field(ge=0.5, le=1.5)
+    saturation: float = Field(ge=0, le=2)
+    temperature: float = Field(ge=-1, le=1)
+    pop: float = Field(ge=0, le=1)
+    sharpness: float = Field(ge=0, le=2)
+    fade: float = Field(ge=0, le=1)
+    vignette: float = Field(ge=0, le=1)
+    grain: float = Field(ge=0, le=1)
+    selective_skin: float = Field(ge=-1, le=1)
+    selective_sky: float = Field(ge=-1, le=1)
+    selective_green: float = Field(ge=-1, le=1)
+    selective_warm: float = Field(ge=-1, le=1)
+
+
+class StyleDirection(BaseModel):
+    id: str
+    label: str
+    tagline: str
+    coach_tip: str = Field(
+        default="",
+        description="Optional Turkish manual-adjustment hint for the Adjust tab",
+    )
+    edit: EditRecipeResponse
+
+
+class SuggestStylesRequest(BaseModel):
+    prompt: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional natural-language style request in Turkish or English",
+    )
+    image_base64: str | None = Field(
+        default=None,
+        description="Low-res JPEG/PNG preview only; full-resolution image is not stored",
+    )
+    mime_type: str = Field(default="image/jpeg", pattern=r"^image/(jpeg|png|webp)$")
+
+
+class SuggestStylesResponse(BaseModel):
+    directions: list[StyleDirection] = Field(min_length=3, max_length=3)
+    reasoning_tr: str
+    source: str = Field(description="gemini | fallback")

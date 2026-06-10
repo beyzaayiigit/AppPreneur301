@@ -1,6 +1,10 @@
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.health import router as health_router
@@ -26,9 +30,9 @@ app = FastAPI(
     title="Lumeris Backend",
     version="1.0.0",
     description=(
-        "Lumeris için yardımcı API: sağlık, sürüm, istemci ipuçları, ön ayar kataloğu ve "
-        "**karşılama deneyimi** (ipuçları, vitrin ön ayarı, ürün sütunları). "
-        "Fotoğraf işleme veya depolama sunulmaz — görüntü verisi istemez."
+        "Lumeris AI backend: Style Triad (Gemini vision + structured edit recipes), "
+        "preset catalog, welcome experience, and health checks. "
+        "Only low-resolution previews are sent for AI analysis; images are not stored."
     ),
 )
 
@@ -59,4 +63,5 @@ def root() -> RootResponse:
         health=f"{base}/health",
         api_v1=f"{base}/api/v1",
         experience=f"{base}/api/v1/experience",
+        suggest_styles=f"{base}/api/v1/suggest-styles",
     )

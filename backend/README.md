@@ -1,6 +1,6 @@
 # Lumeris Backend
 
-FastAPI servisi; istemci uygulaması (`frontend/`) ile ayrı çalışır. Ürün görüntüleri cihazda işler (**zero-server**); bu API meta, istemci ipuçları, ön ayar kataloğu ve **karşılama deneyimi** (ipuçları, vitrin) gibi **fotoğraf içermeyen** uçları sunar.
+FastAPI servisi; istemci uygulaması (`frontend/`) ile ayrı çalışır. Tam çözünürlükte düzenleme cihazda (Skia); bu API **Style Triad** (Gemini), meta, ön ayar kataloğu ve karşılama deneyimi sunar. AI analizi yalnızca düşük çözünürlüklü önizleme ile yapılır; görüntü saklanmaz.
 
 ## Kurulum ve çalıştırma
 
@@ -29,6 +29,8 @@ Varsayılan adres: `http://localhost:3001`
 | `LUMERIS_MIN_CLIENT_VERSION` | `GET /api/v1/config` içinde istemci sürüm ipucu | `1.0.0` |
 | `LUMERIS_MAINTENANCE` | `1` / `true` / `yes` ise bakım modu | kapalı |
 | `LUMERIS_MAINTENANCE_MESSAGE` | Bakım modunda istemciye gösterilebilecek kısa metin | yok |
+| `GEMINI_API_KEY` | Google AI Studio API anahtarı (Style Triad) | yok → fallback |
+| `GEMINI_MODEL` | Gemini model adı | `gemini-2.0-flash` |
 
 ## Uç noktalar
 
@@ -40,6 +42,7 @@ Varsayılan adres: `http://localhost:3001`
 | `GET` | `/api/v1/config` | İstemci için bakım / minimum sürüm ipuçları |
 | `GET` | `/api/v1/presets` | Ön ayar listesi (`index`, `short_label`, `display_name`) — `frontend/src/engine/presets.ts` ile senkron tutulmalı |
 | `GET` | `/api/v1/experience` | Karşılama için ipuçları, vitrin ön ayarı, ürün sütunları ve kısa slogan (JSON) |
+| `POST` | `/api/v1/suggest-styles` | **Style Triad** — 3 AI stil yönü (Gemini vision + JSON); fallback preset |
 
 İstemci (`frontend/`) karşılama ekranı `GET /api/v1/experience` ile aynı yapıyı isteğe bağlı çeker. `frontend/app.json` → `extra.lumerisApiBaseUrl`: Android emülatör için örnek `http://10.0.2.2:3001`, iOS simülatör için `http://127.0.0.1:3001`, fiziksel cihaz için bilgisayarın LAN IP’si. Boşsa uygulama yerleşik varsayılan metinleri kullanır.
 
