@@ -27,7 +27,7 @@ Bu belge [app_prd.md](app_prd.md) ve [plan.md](plan.md) ile uyumlu üretim karar
 | Katman | Seçim |
 |--------|--------|
 | API | FastAPI, `POST /api/v1/suggest-styles` |
-| LLM | Gemini 2.0 Flash (ücretsiz tier); fallback preset |
+| LLM | Gemini 2.5 Flash (birincil); yedek: 2.0 / 1.5 Flash; API yoksa preset fallback |
 | Deploy | Render (API) + Vercel (Expo web), $0 |
 
 Akış: thumbnail 768px → Gemini → JSON edit reçetesi → cihazda Skia render. `GEMINI_API_KEY` yalnızca `backend/.env`.

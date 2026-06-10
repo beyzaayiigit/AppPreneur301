@@ -1,0 +1,22 @@
+# Render free tier — https://render.com/docs/free
+# Dashboard: New > Blueprint > connect repo, or create Web Service manually with rootDir=backend
+services:
+  - type: web
+    name: lumeris-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
