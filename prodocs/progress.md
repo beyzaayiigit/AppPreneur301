@@ -297,7 +297,7 @@ py -m uv run uvicorn app.main:app --host 127.0.0.1 --port 3001 --reload
 
 ---
 
-## 14. UI/UX yenilemesi, izin akışı, motor sadeleştirme ve grain (2026 oturumu)
+## 14. UI/UX yenilemesi, izin akışı, motor sadeleştirme ve grain 
 
 Bu bölüm, önceki numaralı bölümlerdeki metinlere **dokunulmadan**, `mobile/` istemcisinde yapılan güncel geliştirmelerin ayrıntılı kaydıdır. Çalışma dizini kökü: `app_preneur_301`; mobil kod: **`mobile/`** (eski belgelerde geçen `lumeris/` yolu ile aynı uygulama, taşıma için bkz. §12).
 
@@ -438,8 +438,7 @@ Bu bölüm, önceki numaralı bölümlerdeki metinlere **dokunulmadan**, `mobile
 *Ek kayıt (§15): haftalık spotlight (backend + mobile), harman tema, Expo Go Android galeri stratejesi + `granularPermissions`, ipuçları üç sütun layout, editör panel yüksekliği / alt bar padding, export izin + snapshot + paylaşım yedekleri.*
 ---
 
-## 16. Export onizleme, karsilastirma, split kaldirma, panel yumusatma, preset gucu (15. bolumden sonra)
-
+## 16. Export onizleme, karsilastirma, split kaldirma, panel yumusatma, preset gucu 
 Onceki numarali bolumlerin metnine dokunulmadan, bu bolum sonraki kod degisikliklerinin duz ozetidir.
 
 ### 16.1. Export modal onizlemesi
@@ -507,7 +506,7 @@ npx expo start
 
 ---
 
-## 18. AI pivot — Style Triad (2026-06-08)
+## 18. AI pivot — Style Triad 
 
 Önceki bölümlerin metnine dokunulmadan; backend + frontend AI entegrasyonu.
 
@@ -540,7 +539,7 @@ npx expo start
 
 ---
 
-## 19. Editör, favoriler, karşılama metinleri (2026-06-10)
+## 19. Editör, favoriler, karşılama metinleri 
 
 Önceki bölümlerin metnine dokunulmadan.
 
@@ -589,4 +588,80 @@ npx expo start
 
 ---
 
-*Ek kayıt (19): export WYSIWYG, favoriler + side menu, welcome copy, AI stabilite — APK bu kayıtta yok.*
+*Ek kayıt (19): export WYSIWYG, favoriler + side menu, welcome copy, AI stabilite*
+
+---
+
+## 20. Canlı deploy, env ve belge hizalama
+
+Önceki bölümlerin metnine dokunulmadan.
+
+### 20.1. Backend — Render
+
+- Manuel **Web Service** (Frankfurt); kök dizin: `backend`
+- Build: `pip install -r requirements.txt` · Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Canlı URL: **`https://lumeris-api.onrender.com`** (`/health`, `/docs`, `/api/v1/suggest-styles`)
+- Ortam: `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-2.5-flash`, `PUBLIC_BASE_URL`, `CORS_ALLOW_ORIGINS=*`
+- `render.yaml`: Gemini **2.5**; `.idea/` → `.gitignore`
+
+### 20.2. İstemci — API adresi
+
+- `frontend/.env` + `.env.example`: `EXPO_PUBLIC_LUMERIS_API_BASE_URL=https://lumeris-api.onrender.com`
+- `backend/.env.example`: yerel `127.0.0.1:3001` korundu; Render notu yorum satırı
+- `app.json` → `extra.lumerisApiBaseUrl` aynı Render URL (fallback)
+
+### 20.3. Ürün belgeleri (`prodocs/`)
+
+- Orijinal `plan.md`, `app_prd.md`, `app_mvp_kapsam.md` korunarak **minimal ekleme**: Style Triad, favoriler, `frontend/` yolu, deploy notları
+- `plan.md` faz durumları: tamamlananlara **(tamamlandı)** işareti
+
+### 20.4. Vercel (web — isteğe bağlı)
+
+- `frontend/vercel.json` + `npx expo export -p web`
+- Eksik paket hatası giderildi: `react-dom`, `react-native-web`
+- Skia web sınırlı; **asıl demo mobil / APK**
+
+### 20.5. Doğrulama
+
+- Render `/health` OK
+- Yerel: `cd frontend && npx tsc --noEmit`
+
+---
+
+*Ek kayıt (20): Render backend canlı, env örnekleri, render.yaml/Gemini 2.5, prodocs PRD-plan güncellemesi, Vercel web bağımlılıkları.*
+
+---
+
+## 21. Demo APK — Android Studio (standalone)
+
+Önceki bölümlerin metnine dokunulmadan.
+
+### 21.1. Native proje
+
+- `npx expo prebuild --platform android` → `frontend/android/` (gitignore’da; repoya girmez)
+- `expo-build-properties`: yalnızca **`armeabi-v7a`, `arm64-v8a`** (x86 build hatası önlendi)
+- `frontend/scripts/build-apk-debug.ps1` + `npm run apk:demo` (Android Studio JBR / `JAVA_HOME`)
+
+### 21.2. Debug vs release APK
+
+- **`app-debug.apk`:** JS bundle yok → telefonda **“Unable to load script”** (Metro / PC gerekir); demo için uygun değil
+- **`app-release.apk`:** JS bundle APK içinde (`export:embed`) → **Metro gerekmez**; demo için doğru seçim
+- Çıktı yolu: `frontend/android/app/build/outputs/apk/release/app-release.apk` (~51 MB)
+
+### 21.3. Demo akışı
+
+1. `frontend/.env` → Render URL
+2. `cd frontend && npm run apk:demo` (veya Android Studio → `android/` → Build APK)
+3. Eski kurulumu kaldır → release APK kur → backend ayakta iken AI + export dene
+
+### 21.4. Sıradaki (teslim)
+
+- [x] Backend Render deploy + env
+- [x] Release APK (standalone demo)
+- [ ] Demo video / ekran kaydı
+- [ ] Kök `README.md` (ekran görüntüleriyle — repoda henüz yok)
+
+---
+
+*Ek kayıt (21): prebuild, ARM-only, release APK demo, debug APK Metro uyarısı.*
+

@@ -38,7 +38,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "lumerisApiBaseUrl": "http://127.0.0.1:3001"
+      "lumerisApiBaseUrl": "https://lumeris-api.onrender.com"
     },
     "plugins": [
       [
@@ -58,7 +58,15 @@
           ]
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "reactNativeArchitectures": ["armeabi-v7a", "arm64-v8a"]
+          }
+        }
+      ]
     ]
   }
 }
