@@ -15,10 +15,16 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SavedRecipesModal } from '../components/SavedRecipesModal';
 import { pickRandomWelcomeHeroUri } from '../data/heroPhotos';
-import { createDefaultWelcomeExperience, type WelcomeExperience } from '../data/welcomeExperience';
+import {
+  createDefaultWelcomeExperience,
+  HERO_COPY,
+  type WelcomeExperience,
+} from '../data/welcomeExperience';
 import { getLumerisApiBaseUrl } from '../lib/apiBaseUrl';
 import { fetchWelcomeExperience } from '../lib/fetchExperience';
+import { getSavedRecipeCount } from '../lib/savedRecipesStorage';
 import { dark } from '../theme/colors';
 import { fonts } from '../theme/typography';
 
@@ -52,7 +58,13 @@ export function WelcomeScreen({ onImageSelected }: Props) {
   const [experienceLive, setExperienceLive] = useState(false);
   const [heroSource, setHeroSource] = useState<HeroSource>(() => ({ kind: 'remote', uri: pickRandomWelcomeHeroUri() }));
   const [heroReady, setHeroReady] = useState(false);
+  const [recipeCount, setRecipeCount] = useState(0);
+  const [recipesBrowseOpen, setRecipesBrowseOpen] = useState(false);
   const apiBase = useMemo(() => getLumerisApiBaseUrl(), []);
+
+  const refreshRecipeCount = useCallback(() => {
+    void getSavedRecipeCount().then(setRecipeCount);
+  }, []);
 
   const loadRecentAssets = useCallback(async (opts?: { silent?: boolean }) => {
     if (isExpoGoAndroid) {
@@ -152,11 +164,18 @@ export function WelcomeScreen({ onImageSelected }: Props) {
   }, [refreshGalleryFromSystem]);
 
   useEffect(() => {
+    refreshRecipeCount();
+  }, [refreshRecipeCount]);
+
+  useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void refreshGalleryFromSystem(true);
+      if (next === 'active') {
+        void refreshGalleryFromSystem(true);
+        refreshRecipeCount();
+      }
     });
     return () => sub.remove();
-  }, [refreshGalleryFromSystem]);
+  }, [refreshGalleryFromSystem, refreshRecipeCount]);
 
   useEffect(() => {
     if (!apiBase) return;
@@ -234,10 +253,8 @@ export function WelcomeScreen({ onImageSelected }: Props) {
             <View style={styles.heroEdgeTop} pointerEvents="none" />
             <View style={styles.heroVignetteBottom} pointerEvents="none" />
             <View style={styles.heroScrim} pointerEvents="none" />
-            <Text style={styles.heroTitle}>Işığınızı Keşfedin</Text>
-            <Text style={styles.heroSub}>
-              Analog tarzı düzenleme — kayıt yok, reklam yok. İşlem cihazınızda kalır.
-            </Text>
+            <Text style={styles.heroTitle}>{HERO_COPY.title}</Text>
+            <Text style={styles.heroSub}>{HERO_COPY.subtitle}</Text>
             <Pressable style={styles.heroCta} onPress={pickImage} accessibilityLabel="Düzenlemeye başla">
               <Text style={styles.heroCtaText}>Başla</Text>
             </Pressable>
@@ -253,12 +270,8 @@ export function WelcomeScreen({ onImageSelected }: Props) {
           {experience.pillars.map((p) => (
             <View key={p.id} style={styles.pillarCard}>
               <Text style={styles.pillarIcon}>{p.icon}</Text>
-              <Text style={styles.pillarTitle} numberOfLines={2}>
-                {p.title}
-              </Text>
-              <Text style={styles.pillarSub} numberOfLines={2}>
-                {p.subtitle}
-              </Text>
+              <Text style={styles.pillarTitle}>{p.title}</Text>
+              <Text style={styles.pillarSub}>{p.subtitle}</Text>
             </View>
           ))}
         </ScrollView>
@@ -267,9 +280,7 @@ export function WelcomeScreen({ onImageSelected }: Props) {
         <View style={styles.spotlight}>
           <Text style={styles.spotBadge}>{experience.spotlight.badge}</Text>
           <Text style={styles.spotTitle}>{experience.spotlight.title}</Text>
-          <Text style={styles.spotBody} numberOfLines={2}>
-            {experience.spotlight.body}
-          </Text>
+          <Text style={styles.spotBody}>{experience.spotlight.body}</Text>
         </View>
 
         <View style={styles.permCard}>
@@ -346,21 +357,47 @@ export function WelcomeScreen({ onImageSelected }: Props) {
           </View>
         )}
 
+        {recipeCount > 0 ? (
+          <Pressable
+            style={styles.recipeBanner}
+            onPress={() => setRecipesBrowseOpen(true)}
+            accessibilityLabel={`Favoriler, ${recipeCount} adet`}
+          >
+            <Text style={styles.recipeBannerTitle}>★ Favoriler ({recipeCount})</Text>
+            <Text style={styles.recipeBannerSub}>
+              Bir fotoğraf açın; editör menüsünden uygulayın.
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Text style={styles.sectionLabel}>KISA İPUÇLARI</Text>
-        <View style={styles.tipsRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tipsRow}
+        >
           {tipsPreview.map((t) => (
-            <View key={t.id} style={[styles.tipCard, { flex: 1, minWidth: 0 }]}>
+            <View key={t.id} style={styles.tipCard}>
               <Text style={styles.tipTitle}>{t.title}</Text>
               <Text style={styles.tipBody}>{t.body}</Text>
             </View>
           ))}
-        </View>
+        </ScrollView>
 
         <Text style={styles.version}>
           v{appVersion}
           {experienceLive ? ' · canlı içerik' : ''}
         </Text>
       </ScrollView>
+
+      <SavedRecipesModal
+        visible={recipesBrowseOpen}
+        readOnly
+        onClose={() => {
+          setRecipesBrowseOpen(false);
+          refreshRecipeCount();
+        }}
+      />
     </View>
   );
 }
@@ -531,7 +568,7 @@ const styles = StyleSheet.create({
   },
   pillarRow: { gap: 12, paddingHorizontal: 20, paddingBottom: 4 },
   pillarCard: {
-    width: 200,
+    width: 220,
     padding: 16,
     borderRadius: 18,
     backgroundColor: dark.surface,
@@ -543,13 +580,14 @@ const styles = StyleSheet.create({
     color: dark.text,
     fontSize: 14,
     fontFamily: fonts.semiBold,
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 19,
   },
   pillarSub: {
     color: dark.textMuted,
     fontSize: 11,
     fontFamily: fonts.regular,
-    lineHeight: 15,
+    lineHeight: 16,
   },
   tagline: {
     marginHorizontal: 20,
@@ -587,7 +625,7 @@ const styles = StyleSheet.create({
     color: dark.textMuted,
     fontSize: 12,
     fontFamily: fonts.regular,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   permCard: {
     flexDirection: 'row',
@@ -675,6 +713,27 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: dark.borderSubtle,
   },
+  recipeBanner: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: dark.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
+  },
+  recipeBannerTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: 14,
+    color: dark.primary,
+    marginBottom: 4,
+  },
+  recipeBannerSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: dark.textMuted,
+  },
   tipsRow: {
     flexDirection: 'row',
     gap: 10,
@@ -683,6 +742,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   tipCard: {
+    width: 168,
     padding: 14,
     borderRadius: 18,
     backgroundColor: dark.surface,
@@ -694,6 +754,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.semiBold,
     marginBottom: 6,
+    lineHeight: 18,
   },
   tipBody: {
     color: dark.textMuted,

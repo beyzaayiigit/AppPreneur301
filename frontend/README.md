@@ -10,7 +10,7 @@ Uygulama açılır açılmaz **karşılama ekranı** gelir. Bu ekranda:
 - **“Uygulama çalışıyor”** kutusu: on-device MVP, Expo ve **sürüm numarası** (`app.json` ile aynı)
 - (İzin verildiyse) galeri önizleme şeridi ve **Düzenlemeye Başla**
 
-Yani ek bir sunucu veya backend olmadan, ilk ekran projenin cihazda çalıştığının doğrudan kanıtıdır. İsterseniz bu ekranın ekran görüntüsünü repoya ekleyerek GitHub üzerinden de paylaşabilirsiniz (ör. `docs/screenshots/welcome.png`).
+Yani ek bir sunucu veya backend olmadan, ilk ekran projenin cihazda çalıştığının doğrudan kanıtıdır.
 
 ## Çalıştırma
 
@@ -29,7 +29,7 @@ Android emülatör veya fiziksel cihaz önerilir. **Web** hedefi Skia ile sını
 - Basılı tutunca karşılaştırma, geri al / yinele, JPEG olarak galeriye kayıt
 - Cihaz içi KPI zaman damgası (`expo-file-system/legacy`)
 
-Teknik kararlar: [../docs/TECH_FOUNDATION.md](../docs/TECH_FOUNDATION.md)
+Teknik kararlar: [../prodocs/TECH_FOUNDATION.md](../prodocs/TECH_FOUNDATION.md)
 
 ## Sorun giderme
 

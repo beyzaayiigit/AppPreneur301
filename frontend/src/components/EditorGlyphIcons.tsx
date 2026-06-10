@@ -28,6 +28,41 @@ export function LooksFlowerGlyph({ color, size = 22 }: { color: string; size?: n
   );
 }
 
+/** AI — alt nav: üç nokta + merkez vurgu */
+export function AiSparkGlyph({ color, size = 20 }: { color: string; size?: number }) {
+  const d = 3;
+  const cx = size / 2 - d / 2;
+  const cy = size / 2 - d / 2;
+  const r = size * 0.32;
+  const pts = [
+    { x: cx, y: cy - r },
+    { x: cx - r * 0.87, y: cy + r * 0.5 },
+    { x: cx + r * 0.87, y: cy + r * 0.5 },
+  ];
+  return (
+    <View style={[g.wrap, { width: size, height: size }]}>
+      {pts.map((p, i) => (
+        <View
+          key={i}
+          style={[g.dot, { backgroundColor: color, left: p.x, top: p.y, width: d, height: d, borderRadius: d / 2 }]}
+        />
+      ))}
+      <View
+        style={{
+          position: 'absolute',
+          left: cx - 2,
+          top: cy - 2,
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: color,
+          opacity: 0.45,
+        }}
+      />
+    </View>
+  );
+}
+
 /** Adjust — alt nav: üç çizgi */
 export function SlidersNavGlyph({
   color,

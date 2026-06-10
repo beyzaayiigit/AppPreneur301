@@ -1,7 +1,8 @@
 /** Karşılama deneyimi; `createDefaultWelcomeExperience()` her çağrıda güncel haftalık vitrin üretir. */
 
 import { PRESET_NAMES, PRESET_SHORT_LABELS } from '../engine/presets';
-import { weeklyPresetCatalogIndexUtc } from '../lib/weeklyPreset';
+import { WEEKLY_PRESET_COUNT, weeklySpotlightMeta } from '../lib/weeklyPreset';
+import { spotlightBodyForPresetIndex } from './presetSpotlightCopy';
 
 export type TipItem = {
   id: string;
@@ -32,6 +33,12 @@ export type WelcomeExperience = {
   refreshed_at: string;
 };
 
+export const HERO_COPY = {
+  title: 'Işığınızı Keşfedin',
+  subtitle:
+    'Acele etmeyen bir karanlık oda. Renk ve ışığa yavaşça dokunun — görüntü yalnızca cihazınızda kalır.',
+} as const;
+
 const TIPS: TipItem[] = [
   {
     id: 'compare',
@@ -41,51 +48,51 @@ const TIPS: TipItem[] = [
   {
     id: 'grain',
     title: 'Film greni',
-    body: 'Az gren, sıcaklık ve fade ile birlikte ‘mat film’ hissini güçlendirir; portrelerde düşük değerler genelde yeter.',
+    body: 'Az gren, sıcaklık ve fade ile birlikte mat film hissini güçlendirir; portrelerde düşük değerler genelde yeter.',
   },
   {
     id: 'presets',
     title: 'Ön ayar + yoğunluk',
-    body: 'Looks’ta bir stil seçin, ardından yoğunlukla karışımı damıtın; Adjust’ta pozlama/kontrastla inceleyin.',
+    body: "Looks'ta bir stil seçin, ardından yoğunlukla karışımı damıtın; Adjust'ta pozlama ve kontrastla inceleyin.",
   },
   {
     id: 'export',
     title: 'Dışa aktarma',
-    body: 'Export’ta kaliteyi ihtiyaca göre seçin; büyük baskılar için daha yüksek kalite, hızlı paylaşım için HD yeterli olabilir.',
+    body: "Export'ta kaliteyi ihtiyaca göre seçin; büyük baskılar için daha yüksek kalite, hızlı paylaşım için standart yeterli olabilir.",
   },
 ];
 
 const PILLARS: PillarItem[] = [
   {
     id: 'privacy',
-    title: 'Fotoğraf sunucuya gitmez',
-    subtitle: 'Düzenleme ve dışa aktarma cihazınızda; hesap veya bulut şart değil.',
+    title: 'Görüntü sunucuya uğramaz',
+    subtitle: 'Düzenleme cihazınızda kalır; hesap veya bulut gerekmez.',
     icon: '◎',
   },
   {
     id: 'craft',
     title: 'Analog his',
-    subtitle: 'Ön ayarlar, gren, vignette ve fade ile tek tonda sinematik görünüm.',
+    subtitle: 'Ön ayarlar, gren ve fade ile tek nefeste sinematik doku.',
     icon: '◐',
   },
   {
     id: 'calm',
-    title: 'Reklamsız sakinlik',
-    subtitle: 'Odak: görüntü ve kontroller. Abonelik baskısı yok.',
+    title: 'Sessiz ekran',
+    subtitle: 'Reklam ve abonelik baskısı yok. Odak: fotoğrafınız ve kontroller.',
     icon: '◇',
   },
 ];
 
 function buildWeeklySpotlight(now = new Date()): Spotlight {
-  const idx = weeklyPresetCatalogIndexUtc(now);
-  const title = PRESET_NAMES[idx] ?? '';
-  const short = PRESET_SHORT_LABELS[idx] ?? '';
+  const { presetIndex, slotOneBased, total } = weeklySpotlightMeta(now);
+  const title = PRESET_NAMES[presetIndex] ?? '';
+  const short = PRESET_SHORT_LABELS[presetIndex] ?? '';
   return {
-    preset_index: idx,
+    preset_index: presetIndex,
     preset_short_label: short,
-    badge: 'Bu haftanın ön ayarı',
+    badge: `Haftanın ön ayarı · ${slotOneBased}/${total}`,
     title,
-    body: `${title} — Looks’ta deneyin; yoğunlukla yumuşatın.`,
+    body: spotlightBodyForPresetIndex(presetIndex, title),
   };
 }
 
@@ -95,7 +102,10 @@ export function createDefaultWelcomeExperience(now = new Date()): WelcomeExperie
     tips: TIPS,
     pillars: PILLARS,
     spotlight: buildWeeklySpotlight(now),
-    tagline: 'Işığı cihazınızda tutun — Lumeris düzenleme motoru tamamen yerel.',
+    tagline: 'Lumeris, cihazınızda çalışan sessiz bir düzenleme alanı.',
     refreshed_at: '',
   };
 }
+
+/** Haftalık vitrin döngüsündeki toplam ön ayar sayısı (Original hariç). */
+export { WEEKLY_PRESET_COUNT };

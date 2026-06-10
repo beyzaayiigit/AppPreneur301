@@ -10,7 +10,7 @@ export const theme = {
 } as const;
 
 /**
- * Deep Moss — DESIGN.md + deep_moss_design_system_detail.md
+ * Deep Moss — prodocs/DESIGN.md
  * Kaynak: surface-low #0E1511, surface-lowest #09100C, primary sand #E3D5CA,
  * primary-container #3E4B43, accent-organic #84A59D, border #3A4D39.
  * `accent` / `onAccent` geriye dönük alias (eski importlar kırılmasın).

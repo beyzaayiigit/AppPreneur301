@@ -20,6 +20,7 @@
       }
     },
     "android": {
+      "package": "com.lumeris.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#E6E6FA"
@@ -37,7 +38,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "lumerisApiBaseUrl": ""
+      "lumerisApiBaseUrl": "http://127.0.0.1:3001"
     },
     "plugins": [
       [

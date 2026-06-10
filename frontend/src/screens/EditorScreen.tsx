@@ -2,18 +2,24 @@ import { ImageFormat, useCanvasRef } from '@shopify/react-native-skia';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActionSheetIOS,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
   ActivityIndicator,
   Alert,
   Dimensions,
   Image,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StatusBar as RNStatusBar,
   StyleSheet,
   Text,
@@ -21,12 +27,29 @@ import {
   View,
 } from 'react-native';
 import { EditorCanvas } from '../components/EditorCanvas';
-import { AdjustToolGlyph, LooksFlowerGlyph, SlidersNavGlyph } from '../components/EditorGlyphIcons';
+import { EditorSideMenu } from '../components/EditorSideMenu';
+import { AdjustToolGlyph, AiSparkGlyph, LooksFlowerGlyph, SlidersNavGlyph } from '../components/EditorGlyphIcons';
+import { SavedRecipesModal } from '../components/SavedRecipesModal';
+import { SaveRecipeModal } from '../components/SaveRecipeModal';
 import { SliderRow } from '../components/SliderRow';
-import type { AdjustKey, EditState } from '../engine/editState';
+import { StyleTriadPanel } from '../components/StyleTriadPanel';
+import { cloneEditState, type AdjustKey, type EditState } from '../engine/editState';
 import { PRESET_NAMES, PRESET_SHORT_LABELS, presetThumbBackground } from '../engine/presets';
 import { useUndoableEditState } from '../hooks/useUndoableEditState';
+import { getLumerisApiBaseUrl } from '../lib/apiBaseUrl';
+import {
+  computeExportLayout,
+  computePreviewExportSnapRect,
+  EXPORT_ASPECT_OPTIONS,
+  EXPORT_QUALITY_PRESETS,
+  type ExportAspect,
+  type ExportQuality,
+} from '../lib/exportCapture';
+import { upscaleExportJpeg } from '../lib/finalizeExportImage';
 import { recordFirstEditIfNeeded } from '../lib/kpi';
+import { addSavedRecipe, getSavedRecipeCount, isDefaultEditState } from '../lib/savedRecipesStorage';
+import { shareImageFile } from '../lib/shareImageFile';
+import { suggestRecipeName } from '../lib/suggestRecipeName';
 import { dark } from '../theme/colors';
 import { fonts } from '../theme/typography';
 
@@ -63,40 +86,6 @@ function computePreviewSize(
   };
 }
 
-function computeContainRect(
-  srcW: number,
-  srcH: number,
-  dstW: number,
-  dstH: number,
-): { x: number; y: number; width: number; height: number } {
-  const safeSrcW = Math.max(1, srcW);
-  const safeSrcH = Math.max(1, srcH);
-  const scale = Math.min(dstW / safeSrcW, dstH / safeSrcH);
-  const width = Math.max(1, safeSrcW * scale);
-  const height = Math.max(1, safeSrcH * scale);
-  return {
-    x: (dstW - width) / 2,
-    y: (dstH - height) / 2,
-    width,
-    height,
-  };
-}
-
-/** Skia snapshot için tamsayı sınırlar; taşma / sıfır boyut hatalarını azaltır */
-function clampSnapRect(
-  rect: { x: number; y: number; width: number; height: number },
-  maxW: number,
-  maxH: number,
-): { x: number; y: number; width: number; height: number } {
-  const x = Math.max(0, Math.floor(rect.x));
-  const y = Math.max(0, Math.floor(rect.y));
-  let width = Math.max(1, Math.round(rect.width));
-  let height = Math.max(1, Math.round(rect.height));
-  if (x + width > maxW) width = Math.max(1, maxW - x);
-  if (y + height > maxH) height = Math.max(1, maxH - y);
-  return { x, y, width, height };
-}
-
 function mediaLibraryAccessOk(r: MediaLibrary.PermissionResponse): boolean {
   return (
     r.granted ||
@@ -105,34 +94,7 @@ function mediaLibraryAccessOk(r: MediaLibrary.PermissionResponse): boolean {
   );
 }
 
-function computeAspectCropRect(
-  rect: { x: number; y: number; width: number; height: number },
-  aspect: ExportAspect,
-): { x: number; y: number; width: number; height: number } {
-  if (aspect === 'original') return rect;
-  const target = aspect === '1:1' ? 1 : 9 / 16;
-  const srcRatio = rect.width / rect.height;
-  if (srcRatio > target) {
-    const width = rect.height * target;
-    return {
-      x: rect.x + (rect.width - width) / 2,
-      y: rect.y,
-      width,
-      height: rect.height,
-    };
-  }
-  const height = rect.width / target;
-  return {
-    x: rect.x,
-    y: rect.y + (rect.height - height) / 2,
-    width: rect.width,
-    height,
-  };
-}
-
-type EditorTab = 'looks' | 'edit';
-type ExportQuality = 'hd' | 'raw' | '4k';
-type ExportAspect = 'original' | '9:16' | '1:1';
+type EditorTab = 'looks' | 'edit' | 'ai';
 type AdjustCategory = 'light' | 'color' | 'detail';
 
 type Props = {
@@ -225,7 +187,14 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   const topInset = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 6 : 44;
   const previewMaxW = winW - PREVIEW_SIDE_PAD;
   const previewMaxH = Math.round(winH * 0.58);
+  const toolbarBlockH = topInset + 56;
+  const sheetReserveH = Math.round(winH * 0.52) + 20;
+  const previewMaxHAi = Math.max(
+    120,
+    Math.min(previewMaxH, Math.round(winH - toolbarBlockH - sheetReserveH)),
+  );
   const canvasRef = useCanvasRef();
+  const exportCacheRef = useRef<{ path: string; layoutKey: string } | null>(null);
   const {
     current,
     update,
@@ -242,18 +211,80 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   const [compare, setCompare] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportQuality, setExportQuality] = useState<ExportQuality>('hd');
+  const [exportQuality, setExportQuality] = useState<ExportQuality>('high');
   const [exportAspect, setExportAspect] = useState<ExportAspect>('original');
   const [exportPreviewUri, setExportPreviewUri] = useState<string | null>(null);
   const [exportPreviewLoading, setExportPreviewLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [recipesOpen, setRecipesOpen] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [saveDefaultName, setSaveDefaultName] = useState('');
   const [imageDims, setImageDims] = useState<{ width: number; height: number } | null>(null);
   const [activeCategory, setActiveCategory] = useState<AdjustCategory>('light');
   const [activeAdjust, setActiveAdjust] = useState<AdjustKey>('exposure');
+  const [aiBaseline, setAiBaseline] = useState<EditState | null>(null);
   const adjustToolsScrollRef = useRef<ScrollView>(null);
+  const sheetScrollRef = useRef<ScrollView>(null);
+  const aiPromptScrollY = useRef(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [winHBeforeKeyboard, setWinHBeforeKeyboard] = useState(winH);
   const navBarInset = Math.max(0, screenH - winH);
   /** Pencere–ekran farkı bazen üst çentiği de içerir; alt tab bar’da aşırı boşluk oluşmasın diye tavanlı */
   const bottomNavPad = 6 + Math.min(Math.max(navBarInset, 4), 32);
+  const apiBase = useMemo(() => getLumerisApiBaseUrl(), []);
   const isLandscapeImage = (imageDims?.width ?? 0) > (imageDims?.height ?? Number.MAX_SAFE_INTEGER);
+  const isPortraitTall =
+    (imageDims?.height ?? 0) / Math.max(imageDims?.width ?? 1, 1) >= 1.45;
+  const aiKeyboardOpen = editorTab === 'ai' && keyboardInset > 0;
+  const toolbarApproxH = topInset + 44;
+  const sheetMaxH = Math.round(winH * 0.52);
+  const sheetTabChromeH = 56 + bottomNavPad;
+  const sheetScrollMaxH = sheetMaxH - sheetTabChromeH;
+  /** Pencere klavyeyle küçülürse sekmeleri fiziksel alta it (klavyenin altında kalsın). */
+  const keyboardShrunkWindow = aiKeyboardOpen && winH < winHBeforeKeyboard - 24;
+  const tabBarBottomOffset = keyboardShrunkWindow ? -keyboardInset : 0;
+  const aiScrollMaxH = aiKeyboardOpen
+    ? Math.max(
+        120,
+        (keyboardShrunkWindow ? winHBeforeKeyboard : winH) - keyboardInset - toolbarApproxH,
+      )
+    : undefined;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardInset(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardInset(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardInset === 0) setWinHBeforeKeyboard(winH);
+  }, [keyboardInset, winH]);
+
+  const scrollAiPromptIntoView = useCallback((offsetY?: number) => {
+    const y = offsetY ?? aiPromptScrollY.current;
+    aiPromptScrollY.current = y;
+    requestAnimationFrame(() => {
+      sheetScrollRef.current?.scrollTo({
+        y: Math.max(0, y - 16),
+        animated: true,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (aiKeyboardOpen) scrollAiPromptIntoView();
+  }, [aiKeyboardOpen, scrollAiPromptIntoView]);
 
   useEffect(() => {
     Image.getSize(
@@ -264,40 +295,69 @@ export function EditorScreen({ imageUri, onBack }: Props) {
   }, [imageUri]);
 
   const previewSize = useMemo(() => {
-    if (!imageDims) return computePreviewSize(3, 4, previewMaxW, previewMaxH);
-    return computePreviewSize(imageDims.width, imageDims.height, previewMaxW, previewMaxH);
-  }, [imageDims, previewMaxH, previewMaxW]);
-
-  const showEditorOverflowMenu = useCallback(() => {
-    const runUndo = () => {
-      if (canUndo) undo();
-    };
-    const runRedo = () => {
-      if (canRedo) redo();
-    };
-    if (Platform.OS === 'ios') {
-      const opts = ['İptal'];
-      if (canUndo) opts.push('Geri al');
-      if (canRedo) opts.push('Yinele');
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: opts, cancelButtonIndex: 0, userInterfaceStyle: 'dark' },
-        (idx) => {
-          if (opts[idx] === 'Geri al') runUndo();
-          if (opts[idx] === 'Yinele') runRedo();
-        },
-      );
-    } else {
-      const actions: { text: string; onPress?: () => void; style?: 'cancel' }[] = [];
-      if (canUndo) actions.push({ text: 'Geri al', onPress: runUndo });
-      if (canRedo) actions.push({ text: 'Yinele', onPress: runRedo });
-      actions.push({ text: 'Kapat', style: 'cancel' });
-      Alert.alert('Menü', undefined, actions);
-    }
-  }, [canRedo, canUndo, redo, undo]);
+    const maxH = editorTab === 'ai' ? previewMaxHAi : previewMaxH;
+    if (!imageDims) return computePreviewSize(3, 4, previewMaxW, maxH);
+    return computePreviewSize(imageDims.width, imageDims.height, previewMaxW, maxH);
+  }, [editorTab, imageDims, previewMaxHAi, previewMaxH, previewMaxW]);
 
   const touchEdit = useCallback(() => {
     void recordFirstEditIfNeeded();
   }, []);
+
+  const openSaveRecipe = useCallback(() => {
+    Keyboard.dismiss();
+    setCompare(false);
+    if (isDefaultEditState(current)) {
+      Alert.alert(
+        'Henüz bir görünüm yok',
+        'Kaydetmek için önce bir preset, ayar veya AI önerisi uygula.',
+      );
+      return;
+    }
+    setSaveDefaultName(suggestRecipeName(current));
+    setSaveOpen(true);
+  }, [current]);
+
+  const openRecipesList = useCallback(() => {
+    Keyboard.dismiss();
+    setCompare(false);
+    setRecipesOpen(true);
+  }, []);
+
+  const handleSaveRecipe = useCallback(
+    async (name: string) => {
+      setSavingRecipe(true);
+      try {
+        await addSavedRecipe(name, current);
+        setSaveOpen(false);
+      } catch {
+        Alert.alert('Kaydedilemedi', 'Favori dosyasına yazılamadı. Tekrar dene.');
+      } finally {
+        setSavingRecipe(false);
+      }
+    },
+    [current],
+  );
+
+  const handleApplyRecipe = useCallback(
+    (state: EditState) => {
+      commitReplace(cloneEditState(state));
+      touchEdit();
+      setAiBaseline(null);
+    },
+    [commitReplace, touchEdit],
+  );
+
+  const showEditorMenu = useCallback(() => {
+    Keyboard.dismiss();
+    setCompare(false);
+    setMenuOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    void getSavedRecipeCount().then(setFavoriteCount);
+  }, [menuOpen]);
 
   const controlsInCategory = useMemo(
     () => ADJUST_CONTROLS.filter((c) => c.category === activeCategory),
@@ -325,7 +385,63 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     update((c) => ({ ...c, [key]: value } as EditState));
   };
 
-  const jpegQuality = exportQuality === '4k' ? 95 : exportQuality === 'raw' ? 98 : 88;
+  const exportSourceW = imageDims?.width ?? previewSize.w;
+  const exportSourceH = imageDims?.height ?? previewSize.h;
+
+  const exportLayout = useMemo(() => {
+    if (!exportOpen) return null;
+    return computeExportLayout(exportSourceW, exportSourceH, exportQuality, exportAspect);
+  }, [exportAspect, exportOpen, exportQuality, exportSourceH, exportSourceW]);
+
+  const writeExportJpeg = useCallback(async (base64: string) => {
+    const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+    if (!baseDir) {
+      throw new Error('Cihazda geçici dosya konumu kullanılamıyor.');
+    }
+    const path = `${baseDir}lumeris_export_${Date.now()}.jpg`;
+    await FileSystem.writeAsStringAsync(path, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return path;
+  }, []);
+
+  const previewExportSnap = useMemo(() => {
+    if (!exportOpen) return null;
+    return computePreviewExportSnapRect(
+      exportSourceW,
+      exportSourceH,
+      previewSize.w,
+      previewSize.h,
+      exportAspect,
+    );
+  }, [exportAspect, exportOpen, exportSourceH, exportSourceW, previewSize.h, previewSize.w]);
+
+  const exportLayoutKey = exportLayout
+    ? `${exportLayout.cropRect.width}x${exportLayout.cropRect.height}-${exportLayout.jpegQuality}-${exportAspect}`
+    : '';
+
+  const captureExportFile = useCallback(async () => {
+    if (!exportLayout || !previewExportSnap) {
+      throw new Error('Dışa aktarma düzeni hazır değil.');
+    }
+    await waitPaintFrames(5);
+    const snap = canvasRef.current?.makeImageSnapshot(previewExportSnap);
+    if (!snap) {
+      throw new Error('Görüntü oluşturulamadı. Tekrar deneyin.');
+    }
+    const rawBase64 = snap.encodeToBase64(ImageFormat.JPEG, 98);
+    const tempPath = await writeExportJpeg(rawBase64);
+    const finalPath = await upscaleExportJpeg(tempPath, exportLayout);
+    exportCacheRef.current = { path: finalPath, layoutKey: exportLayoutKey };
+    return finalPath;
+  }, [canvasRef, exportAspect, exportLayout, exportLayoutKey, previewExportSnap, writeExportJpeg]);
+
+  const resolveExportPath = useCallback(async () => {
+    if (exportCacheRef.current?.layoutKey === exportLayoutKey) {
+      return exportCacheRef.current.path;
+    }
+    return captureExportFile();
+  }, [captureExportFile, exportLayoutKey]);
 
   const exportImage = useCallback(async () => {
     setExporting(true);
@@ -352,35 +468,10 @@ export function EditorScreen({ imageUri, onBack }: Props) {
         return;
       }
 
-      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-      if (!baseDir) {
-        Alert.alert('Dışa aktarma', 'Cihazda geçici dosya konumu kullanılamıyor.');
-        return;
-      }
-
-      const srcW = imageDims?.width ?? previewSize.w;
-      const srcH = imageDims?.height ?? previewSize.h;
-      const containRect = computeContainRect(srcW, srcH, previewSize.w, previewSize.h);
-      const cropRect = clampSnapRect(
-        computeAspectCropRect(containRect, exportAspect),
-        previewSize.w,
-        previewSize.h,
-      );
-      await waitPaintFrames(2);
-      const snap = canvasRef.current?.makeImageSnapshot(cropRect);
-      if (!snap) {
-        Alert.alert('Dışa aktarma', 'Görüntü oluşturulamadı. Tekrar deneyin.');
-        return;
-      }
-      const base64 = snap.encodeToBase64(ImageFormat.JPEG, jpegQuality);
-      const path = `${baseDir}lumeris_export_${Date.now()}.jpg`;
-      await FileSystem.writeAsStringAsync(path, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const path = await resolveExportPath();
 
       if (!permOk && isExpoGoAndroid) {
-        const contentUri = await FileSystem.getContentUriAsync(path);
-        await Share.share({ title: 'Lumeris', url: contentUri });
+        await shareImageFile(path);
         setExportOpen(false);
         Alert.alert(
           'Expo Go (Android)',
@@ -394,8 +485,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
       } catch (saveErr) {
         if (Platform.OS === 'android') {
           try {
-            const contentUri = await FileSystem.getContentUriAsync(path);
-            await Share.share({ title: 'Lumeris', url: contentUri });
+            await shareImageFile(path);
             setExportOpen(false);
             Alert.alert(
               'Paylaş',
@@ -410,42 +500,54 @@ export function EditorScreen({ imageUri, onBack }: Props) {
       }
 
       setExportOpen(false);
-      Alert.alert('Kaydedildi', 'Fotoğraf galerinize eklendi. EXIF koruma düzeyi cihaza bağlıdır.');
+      Alert.alert('Kaydedildi', 'Düzenlenmiş fotoğraf galerinize eklendi.');
     } catch (e) {
       Alert.alert('Hata', e instanceof Error ? e.message : 'Dışa aktarma başarısız.');
     } finally {
       setExporting(false);
     }
-  }, [canvasRef, exportAspect, imageDims?.height, imageDims?.width, jpegQuality, previewSize.h, previewSize.w]);
+  }, [resolveExportPath]);
+
+  const shareExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const path = await resolveExportPath();
+      await shareImageFile(path);
+    } catch (e) {
+      Alert.alert('Paylaşım', e instanceof Error ? e.message : 'Paylaşım başarısız.');
+    } finally {
+      setExporting(false);
+    }
+  }, [resolveExportPath]);
+
+  const handleAiBeginSuggest = useCallback(() => {
+    setAiBaseline(cloneEditState(current));
+  }, [current]);
 
   const setTab = (t: EditorTab) => {
     setCompare(false);
+    if (t === 'ai' && aiBaseline === null) {
+      setAiBaseline(cloneEditState(current));
+    }
     setEditorTab(t);
   };
 
   useLayoutEffect(() => {
-    if (!exportOpen) {
+    if (!exportOpen || !previewExportSnap) {
       setExportPreviewUri(null);
       setExportPreviewLoading(false);
+      exportCacheRef.current = null;
       return;
     }
 
     let cancelled = false;
     setExportPreviewLoading(true);
     setExportPreviewUri(null);
+    exportCacheRef.current = null;
 
-    const srcW = imageDims?.width ?? previewSize.w;
-    const srcH = imageDims?.height ?? previewSize.h;
-    const containRect = computeContainRect(srcW, srcH, previewSize.w, previewSize.h);
-    const cropRect = clampSnapRect(
-      computeAspectCropRect(containRect, exportAspect),
-      previewSize.w,
-      previewSize.h,
-    );
-
-    void waitPaintFrames(2).then(() => {
+    void waitPaintFrames(4).then(() => {
       if (cancelled) return;
-      const snap = canvasRef.current?.makeImageSnapshot(cropRect);
+      const snap = canvasRef.current?.makeImageSnapshot(previewExportSnap);
       if (cancelled) return;
       if (!snap) {
         setExportPreviewUri(null);
@@ -453,7 +555,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
         return;
       }
       try {
-        const base64 = snap.encodeToBase64(ImageFormat.JPEG, 78);
+        const base64 = snap.encodeToBase64(ImageFormat.JPEG, 82);
         setExportPreviewUri(`data:image/jpeg;base64,${base64}`);
       } finally {
         if (!cancelled) setExportPreviewLoading(false);
@@ -463,18 +565,16 @@ export function EditorScreen({ imageUri, onBack }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [canvasRef, current, exportAspect, exportOpen, imageDims?.height, imageDims?.width, previewSize.h, previewSize.w]);
+  }, [canvasRef, current, exportAspect, exportOpen, exportQuality, previewExportSnap]);
 
   return (
     <View style={styles.root}>
       <View style={[styles.toolbar, { paddingTop: topInset }]}>
         <View style={styles.toolbarSide}>
           <Pressable
-            onPress={onBack}
-            onLongPress={showEditorOverflowMenu}
-            delayLongPress={420}
+            onPress={showEditorMenu}
             style={styles.toolIcon}
-            accessibilityLabel="Düzenleyiciden çık; uzun bas: geri al menüsü"
+            accessibilityLabel="Menü: favoriler, ana ekrana dön"
           >
             <View style={styles.menuIcon} accessibilityIgnoresInvertColors>
               <View style={styles.menuLine} />
@@ -482,13 +582,35 @@ export function EditorScreen({ imageUri, onBack }: Props) {
               <View style={styles.menuLine} />
             </View>
           </Pressable>
+          <View style={styles.historyGroup}>
+            <Pressable
+              onPress={() => canUndo && undo()}
+              disabled={!canUndo}
+              style={[styles.historyBtn, !canUndo && styles.historyBtnDisabled]}
+              accessibilityLabel="Geri al"
+            >
+              <Text style={[styles.historyBtnText, canUndo && styles.historyBtnTextOn]}>↩</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => canRedo && redo()}
+              disabled={!canRedo}
+              style={[styles.historyBtn, !canRedo && styles.historyBtnDisabled]}
+              accessibilityLabel="Yinele"
+            >
+              <Text style={[styles.historyBtnText, canRedo && styles.historyBtnTextOn]}>↪</Text>
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.brandTitle} pointerEvents="none">
           Lumeris
         </Text>
         <View style={[styles.toolbarSide, styles.toolbarSideRight]}>
           <Pressable
-            onPress={() => setExportOpen(true)}
+            onPress={() => {
+              Keyboard.dismiss();
+              setCompare(false);
+              setExportOpen(true);
+            }}
             style={styles.toolbarExport}
             accessibilityLabel="Export"
           >
@@ -497,8 +619,16 @@ export function EditorScreen({ imageUri, onBack }: Props) {
         </View>
       </View>
 
-      <View style={styles.body}>
-        <View style={[styles.previewSlot, isLandscapeImage && styles.previewSlotLandscape]}>
+      <View style={[styles.body, aiKeyboardOpen && styles.bodyKeyboard]}>
+        {!aiKeyboardOpen ? (
+        <View
+          style={[
+            styles.previewSlot,
+            isLandscapeImage && styles.previewSlotLandscape,
+            editorTab === 'ai' && styles.previewSlotAi,
+            editorTab === 'ai' && isPortraitTall && styles.previewSlotPortrait,
+          ]}
+        >
           <View style={[styles.previewCard, { width: previewSize.w, height: previewSize.h }]}>
             {editorTab === 'looks' ? (
               <Pressable
@@ -551,14 +681,42 @@ export function EditorScreen({ imageUri, onBack }: Props) {
             )}
           </View>
         </View>
-        <View style={[styles.unifiedSheet, { paddingBottom: bottomNavPad, maxHeight: Math.round(winH * 0.52) }]}>
+        ) : null}
+        <View
+          style={[
+            styles.unifiedSheet,
+            aiKeyboardOpen
+              ? [styles.unifiedSheetKeyboard, { top: toolbarApproxH, bottom: tabBarBottomOffset }]
+              : { maxHeight: sheetMaxH },
+          ]}
+        >
           <ScrollView
-            style={styles.sheetScroll}
-            contentContainerStyle={styles.sheetScrollContent}
+            ref={sheetScrollRef}
+            style={[
+              styles.sheetScroll,
+              { maxHeight: aiScrollMaxH ?? sheetScrollMaxH },
+            ]}
+            contentContainerStyle={[
+              styles.sheetScrollContent,
+              aiKeyboardOpen && { paddingBottom: sheetTabChromeH + 8 },
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             nestedScrollEnabled
           >
+            <View style={editorTab !== 'ai' ? styles.tabHidden : undefined}>
+              <StyleTriadPanel
+                imageUri={imageUri}
+                apiBaseUrl={apiBase}
+                baselineState={aiBaseline ?? current}
+                aiTabActive={editorTab === 'ai'}
+                onTouchEdit={touchEdit}
+                onApply={(next) => commitReplace(next)}
+                onBeginSuggest={handleAiBeginSuggest}
+                onPromptFocus={scrollAiPromptIntoView}
+              />
+            </View>
             {editorTab === 'looks' ? (
               <>
                 <View style={styles.looksPresetMetaRow}>
@@ -633,7 +791,7 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                   )}
                 </View>
               </>
-            ) : (
+            ) : editorTab === 'edit' ? (
               <>
                 <View style={styles.categoryRow}>
                   {(['light', 'color', 'detail'] as const).map((cat) => {
@@ -702,33 +860,56 @@ export function EditorScreen({ imageUri, onBack }: Props) {
                   onSlidingComplete={() => endGesture()}
                 />
               </>
-            )}
+            ) : null}
           </ScrollView>
-          <View style={styles.sheetNavDivider} />
-          <View style={styles.sheetNavRow}>
-            <Pressable
-              style={[styles.navCell, editorTab === 'looks' && styles.navCellOn]}
-              onPress={() => setTab('looks')}
-              accessibilityLabel="Looks"
-            >
-              <LooksFlowerGlyph
-                color={editorTab === 'looks' ? dark.accentOrganic : dark.textMuted}
-                size={22}
-              />
-              <Text style={[styles.navLabel, editorTab === 'looks' && styles.navLabelOn]}>Looks</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.navCell, editorTab === 'edit' && styles.navCellOn]}
-              onPress={() => setTab('edit')}
-              accessibilityLabel="Adjust"
-            >
-              <SlidersNavGlyph
-                color={editorTab === 'edit' ? dark.onPrimaryContainer : dark.textMuted}
-                active={editorTab === 'edit'}
-                size={20}
-              />
-              <Text style={[styles.navLabel, editorTab === 'edit' && styles.navLabelOn]}>Adjust</Text>
-            </Pressable>
+          <View
+            style={[
+              styles.sheetNavFooter,
+              aiKeyboardOpen
+                ? [
+                    styles.sheetNavFooterPinned,
+                    { paddingBottom: bottomNavPad, bottom: tabBarBottomOffset },
+                  ]
+                : { paddingBottom: bottomNavPad },
+            ]}
+          >
+            <View style={styles.sheetNavDivider} />
+            <View style={styles.sheetNavRow}>
+              <Pressable
+                style={[styles.navCell, editorTab === 'looks' && styles.navCellOn]}
+                onPress={() => setTab('looks')}
+                accessibilityLabel="Looks"
+              >
+                <LooksFlowerGlyph
+                  color={editorTab === 'looks' ? dark.accentOrganic : dark.textMuted}
+                  size={22}
+                />
+                <Text style={[styles.navLabel, editorTab === 'looks' && styles.navLabelOn]}>Looks</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.navCell, editorTab === 'edit' && styles.navCellOn]}
+                onPress={() => setTab('edit')}
+                accessibilityLabel="Adjust"
+              >
+                <SlidersNavGlyph
+                  color={editorTab === 'edit' ? dark.onPrimaryContainer : dark.textMuted}
+                  active={editorTab === 'edit'}
+                  size={20}
+                />
+                <Text style={[styles.navLabel, editorTab === 'edit' && styles.navLabelOn]}>Adjust</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.navCell, editorTab === 'ai' && styles.navCellOn]}
+                onPress={() => setTab('ai')}
+                accessibilityLabel="AI Style Triad"
+              >
+                <AiSparkGlyph
+                  color={editorTab === 'ai' ? dark.accentOrganic : dark.textMuted}
+                  size={20}
+                />
+                <Text style={[styles.navLabel, editorTab === 'ai' && styles.navLabelOn]}>AI</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </View>
@@ -753,68 +934,93 @@ export function EditorScreen({ imageUri, onBack }: Props) {
             )}
             {exportPreviewLoading ? <Text style={styles.modalPreviewHint}>Önizleme hazırlanıyor…</Text> : null}
 
-            <Text style={styles.modalSectionLabel}>KALİTE</Text>
+            <Text style={styles.modalSectionLabel}>ÇÖZÜNÜRLÜK</Text>
             <View style={styles.segmentRow}>
-              {(['hd', 'raw', '4k'] as const).map((q) => (
-                <Pressable
-                  key={q}
-                  onPress={() => setExportQuality(q)}
-                  style={[styles.segment, exportQuality === q && styles.segmentOn]}
-                >
-                  <Text style={[styles.segmentText, exportQuality === q && styles.segmentTextOn]}>
-                    {q === 'hd' ? 'HD' : q === 'raw' ? 'RAW' : '4K'}
-                  </Text>
-                </Pressable>
-              ))}
+              {(['standard', 'high', 'maximum'] as const).map((q) => {
+                const preset = EXPORT_QUALITY_PRESETS[q];
+                const on = exportQuality === q;
+                return (
+                  <Pressable
+                    key={q}
+                    onPress={() => setExportQuality(q)}
+                    style={[styles.segment, on && styles.segmentOn]}
+                  >
+                    <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{preset.label}</Text>
+                    <Text style={[styles.segmentSub, on && styles.segmentSubOn]}>{preset.hint}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={styles.modalSectionLabel}>BOYUT</Text>
-            <View style={styles.segmentRow}>
-              {(['original', '9:16', '1:1'] as const).map((a) => (
-                <Pressable
-                  key={a}
-                  onPress={() => setExportAspect(a)}
-                  style={[styles.segment, exportAspect === a && styles.segmentOn]}
-                >
-                  <Text style={[styles.segmentText, exportAspect === a && styles.segmentTextOn]}>
-                    {a === 'original' ? 'Original' : a === '9:16' ? '9:16' : '1:1'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.aspectStrip}
+            >
+              {EXPORT_ASPECT_OPTIONS.map((option) => {
+                const on = exportAspect === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setExportAspect(option.id)}
+                    style={[styles.aspectChip, on && styles.aspectChipOn]}
+                  >
+                    <Text style={[styles.aspectChipText, on && styles.aspectChipTextOn]}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <Text style={styles.modalHint}>
-              Boyut seçimi dışa aktarmada merkez kırpma olarak uygulanır.
+              {exportLayout
+                ? `Çıktı: ${exportLayout.outputLabel} px · önizleme ile aynı görünüm · merkez kırpma`
+                : 'Boyut seçimi dışa aktarmada merkez kırpma olarak uygulanır.'}
             </Text>
 
-            <Pressable
-              style={[styles.modalSave, exporting && styles.disabled]}
-              disabled={exporting}
-              onPress={() => void exportImage()}
-            >
-              <Text style={styles.modalSaveText}>{exporting ? '…' : 'Kaydet'}</Text>
-            </Pressable>
-
-            <Text style={styles.shareDivider}>VEYA ŞURADA PAYLAŞ</Text>
-            <View style={styles.shareRow}>
+            <View style={styles.exportActionRow}>
               <Pressable
-                style={styles.shareDot}
-                onPress={() => void Share.share({ message: 'Lumeris', url: imageUri }).catch(() => {})}
+                style={[styles.modalSave, styles.modalSaveHalf, exporting && styles.disabled]}
+                disabled={exporting}
+                onPress={() => void exportImage()}
               >
-                <Text style={styles.shareDotText}>↗</Text>
+                <Text style={styles.modalSaveText}>{exporting ? '…' : 'Galeriye kaydet'}</Text>
               </Pressable>
-              <Pressable style={styles.shareDot}>
-                <Text style={styles.shareDotText}>◎</Text>
-              </Pressable>
-              <Pressable style={styles.shareDot}>
-                <Text style={styles.shareDotText}>@</Text>
-              </Pressable>
-              <Pressable style={styles.shareDot}>
-                <Text style={styles.shareDotText}>···</Text>
+              <Pressable
+                style={[styles.modalShare, exporting && styles.disabled]}
+                disabled={exporting}
+                onPress={() => void shareExport()}
+              >
+                <Text style={styles.modalShareText}>{exporting ? '…' : 'Paylaş'}</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
+
+      <EditorSideMenu
+        visible={menuOpen}
+        topInset={topInset}
+        favoriteCount={favoriteCount}
+        onClose={() => setMenuOpen(false)}
+        onSaveFavorite={openSaveRecipe}
+        onOpenFavorites={openRecipesList}
+        onExit={onBack}
+      />
+
+      <SaveRecipeModal
+        visible={saveOpen}
+        defaultName={saveDefaultName}
+        saving={savingRecipe}
+        onClose={() => {
+          if (!savingRecipe) setSaveOpen(false);
+        }}
+        onSave={(name) => void handleSaveRecipe(name)}
+      />
+      <SavedRecipesModal
+        visible={recipesOpen}
+        onClose={() => setRecipesOpen(false)}
+        onApply={(state) => handleApplyRecipe(state)}
+      />
     </View>
   );
 }
@@ -831,10 +1037,33 @@ const styles = StyleSheet.create({
     backgroundColor: dark.bg,
   },
   toolbarSide: {
-    width: 80,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    width: 124,
+    gap: 0,
+  },
+  historyGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  historyBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyBtnDisabled: {
+    opacity: 0.28,
+  },
+  historyBtnText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: dark.textDisabled,
+  },
+  historyBtnTextOn: {
+    color: dark.textMuted,
   },
   toolbarSideRight: {
     justifyContent: 'flex-end',
@@ -869,6 +1098,7 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.35 },
   body: { flex: 1 },
+  bodyKeyboard: { position: 'relative', overflow: 'visible' },
   previewSlot: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -879,6 +1109,14 @@ const styles = StyleSheet.create({
   },
   previewSlotLandscape: {
     justifyContent: 'center',
+  },
+  previewSlotAi: {
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  previewSlotPortrait: {
+    justifyContent: 'center',
+    paddingTop: 4,
   },
   previewCard: {
     borderRadius: 16,
@@ -928,13 +1166,37 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
+  unifiedSheetKeyboard: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginTop: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'visible',
+  },
+  sheetNavFooter: {
+    backgroundColor: dark.bgElevated,
+  },
+  sheetNavFooterPinned: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingBottom: 0,
+  },
   sheetScroll: {
-    flexGrow: 0,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   sheetScrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 10,
+  },
+  tabHidden: {
+    display: 'none',
   },
   sheetNavDivider: {
     height: StyleSheet.hairlineWidth,
@@ -1189,32 +1451,43 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 13, fontFamily: fonts.bold, color: dark.textMuted },
   segmentTextOn: { color: dark.onPrimary },
+  segmentSub: { fontSize: 10, fontFamily: fonts.medium, color: dark.textDim, marginTop: 2 },
+  segmentSubOn: { color: 'rgba(232, 240, 236, 0.82)' },
+  aspectStrip: { flexDirection: 'row', gap: 8, paddingVertical: 2, paddingRight: 8, marginBottom: 16 },
+  aspectChip: {
+    minWidth: 58,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(26, 33, 29, 0.55)',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: dark.borderSubtle,
+  },
+  aspectChipOn: {
+    backgroundColor: dark.primary,
+    borderColor: dark.primary,
+  },
+  aspectChipText: { fontSize: 12, fontFamily: fonts.bold, color: dark.textMuted },
+  aspectChipTextOn: { color: dark.onPrimary },
   modalHint: { fontSize: 11, color: dark.textDim, marginBottom: 16, lineHeight: 16 },
+  exportActionRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   modalSave: {
     backgroundColor: dark.primary,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 16,
   },
-  modalSaveText: { color: dark.onPrimary, fontSize: 16, fontFamily: fonts.bold },
-  shareDivider: {
-    textAlign: 'center',
-    color: dark.textDim,
-    fontSize: 11,
-    marginBottom: 12,
-    letterSpacing: 0.5,
-  },
-  shareRow: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
-  shareDot: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(26, 33, 29, 0.65)',
+  modalSaveHalf: { flex: 1 },
+  modalSaveText: { color: dark.onPrimary, fontSize: 15, fontFamily: fonts.bold },
+  modalShare: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(26, 33, 29, 0.65)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: dark.borderSubtle,
   },
-  shareDotText: { color: dark.text, fontSize: 16 },
+  modalShareText: { color: dark.text, fontSize: 15, fontFamily: fonts.bold },
 });
