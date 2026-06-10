@@ -11,12 +11,15 @@ Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. 
 
 * **Stratejik Hedef:** 18-25 yaş arası görsel estetik odaklı kitlenin "go-to" hızlı düzenleme aracı olmak.
 * **Değer Önerisi:** Sıfır kayıt, maksimum hız, güçlü hazır analog filtreler ve bunları destekleyen esnek manuel ayar kontrolleri ile hızlı ama derinlemesine fotoğraf düzenleme deneyimi.
+* **Ek (bitirme pivotu):** Kullanıcı stilini tarif edemezse **Style Triad** — AI üç stil yönü önerir, tek dokunuşla Skia pipeline'a uygulanır.
 ---
 
 ## 2. Kullanıcı Hikayeleri (User Stories)
 * **Giriş:** Bir kullanıcı olarak, uygulamayı açtığımda estetik bir karşılama ekranı görmek, buradan tek dokunuşla galerime veya düzenleme akışına geçmek istiyorum.
 * **Düzenleme:** Bir mobil fotoğrafçı olarak,GPU gücünü kullanan akıcı bir arayüzle ve tek dokunuşla güçlü sonuç veren hazır analog filtreler kullanmak, dilersem de fotoğraflarımı manuel ayarlarla (ışık, renk, HSL vb.) detaylı şekilde özelleştirmek istiyorum.
 * **Gizlilik:** Verilerine hassas bir birey olarak, fotoğraflarımın hiçbir sunucuya yüklenmediğinden emin olmak istiyorum.
+* **AI stil koçu (opt-in):** Stilimi tarif ettiğimde veya fotoğrafıma baktığımda üç edit önerisi alıp birini anında uygulamak istiyorum; tam dosyam sunucuya gitmesin.
+* **Kayıtlı tarif:** Beğendiğim düzenleme ayarlarını kaydedip başka bir fotoğrafa uygulamak istiyorum.
 
 ---
 
@@ -35,9 +38,15 @@ Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. 
     * **Luminance (Parlaklık):** -100 / +100
 * **FR6 (Temel Araçlar):** Pozlama, Kontrast, Sıcaklık, Doygunluk, Keskinlik, Solma (Fade) ve Vignette sliderları. Bu kontroller, hazır filtreler üzerine ince ayar yapmak veya tamamen manuel düzenleme yapmak için kullanılabilir.
 
-### 3.3. Etkileşim ve Kayıt
+### 3.3. Style Triad (AI — bitirme kapsamı)
+* **FR9:** Editörde AI sekmesi; isteğe bağlı metin + düşük çözünürlüklü önizleme (kullanıcı onayı).
+* **FR10:** Backend (Gemini) → 3 isimlendirilmiş stil kartı (JSON edit reçetesi); API yoksa çevrimdışı fallback.
+* **FR11:** Karta dokununca Skia pipeline anında uygular.
+
+### 3.4. Etkileşim ve Kayıt
 * **FR7 (Export):** Orijinal dosya boyutunu ve metadata (EXIF) verilerini koruyarak galeriye kayıt.
 * **FR8 (Compare):** Düzenleme sırasında ekrana basılı tutulduğunda "öncesi/sonrası" (before/after) görünümü.
+* **FR12 (Kayıtlı tarifler):** Tam `EditState` cihazda saklanır; favoriler listesinden başka fotoğrafa uygulanabilir veya silinebilir.
 
 ---
 
@@ -47,11 +56,17 @@ Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. 
 * **On-Device Processing:** Görüntü işleme kütüphaneleri (iOS için Core Image/Metal, Cross-platform için GPU-accelerated shaders) kullanılmalıdır. CPU kullanımı minimize edilmeli, tüm işlemler GPU üzerinde yürümelidir.
 * **Offline-First:** Uygulamanın çalışması için aktif bir internet bağlantısı gerekmemelidir.
 * **Zero-Server Policy:** Hiçbir kullanıcı verisi, fotoğraf veya işlem kaydı dış sunucuya aktarılmamalıdır.
+* **Hybrid AI istisnası (Style Triad):** Tam çözünürlük cihazda kalır; yalnızca kullanıcı onayıyla küçük thumbnail backend'e gider. Manuel düzenleme ve export zero-server kalır.
 
 ### 4.2. UI/UX Spesifikasyonları
 * **Renk Paleti:** Ana tema "Lilac & Soft Gray" (Örn: #E6E6FA lila tonları).
 * **Tipografi:** Modern, sans-serif, okunaklı font ailesi.
 * **Haptic Feedback:** Slider hareketlerinde ve buton etkileşimlerinde hafif dokunsal geri bildirim.
+
+### 4.3. Repo yapısı
+* İstemci: `frontend/` (Expo + React Native + Skia)
+* Backend: `backend/` (FastAPI; meta, presets, experience, suggest-styles)
+* Belgeler: `prodocs/`
 
 ---
 
@@ -63,7 +78,7 @@ Lumeris, mobil fotoğrafçılıkta "karmaşayı" ortadan kaldırmayı hedefler. 
 ---
 
 ## 6. Yol Haritası (Gelecek Fazlar)
-* **V1.1:** Kullanıcının kendi "Preset"lerini (ayar setleri) oluşturup kaydetme özelliği.
+* **V1.1:** Kullanıcının kendi "Preset"lerini (ayar setleri) oluşturup kaydetme özelliği. *(Kısmen uygulandı: kayıtlı tarifler / favoriler.)*
 * **V1.2:** Analog çerçeve (film frames) ve tarih damgası (date stamp) seçenekleri.
 * **V2.0:** Batch Processing (Birden fazla fotoğrafı aynı anda düzenleme).
 * **Wildcard Deneyi:** Fotoğrafın renk paletine göre otomatik ambient müzik önerisi (Opsiyonel etkileşim).

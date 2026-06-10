@@ -42,10 +42,16 @@ gibi temel ışık ve renk ayarlarını özgürce düzenleyebilir.
 * **Bas-Karşılaştır:** Orijinal görselle anlık farkı görme mekanizması.
 * **Hızlı Export:** Metadata verilerini koruyarak kayıpsız JPG/PNG kaydı.
 
+### D. Style Triad ve kayıtlı tarifler (bitirme kapsamı eklentisi)
+* **Style Triad:** AI sekmesinde 3 stil önerisi; kullanıcı onayıyla küçük önizleme backend'e gider, tam dosya cihazda kalır.
+* **Kayıtlı tarifler:** Beğenilen düzenleme ayarları cihazda saklanır; başka fotoğrafa uygulanabilir.
+
 ## 4. TEKNİK GEREKSİNİMLER
 * **Platform:** iOS (Swift/Core Image) veya Cross-platform (Flutter/React Native + GPU kütüphaneleri).
 * **İşleme:** Tamamen cihaz üzerinde (Offline-first).
 * **Depolama:** Fotoğraflar sunucuda tutulmaz, sadece yerel önbellek kullanılır.
+* **Servis ayrımı:** İstemci `frontend/`, yardımcı API `backend/` (FastAPI). Belgeler `prodocs/`.
+* **AI istisnası:** Style Triad için yalnızca opt-in thumbnail API'ye gider; düzenleme ve export zero-server kalır.
 
 ## 5. BAŞARI METRİKLERİ (KPIs)
 * **Time-to-Edit:** Uygulama açılışından ilk fotoğrafa efekt uygulama süresi (< 3 saniye).

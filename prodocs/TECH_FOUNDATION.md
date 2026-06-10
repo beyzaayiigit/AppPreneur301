@@ -1,6 +1,6 @@
 # Lumeris — Teknik temel ve Faz 0 kararları
 
-Bu belge [app_prd.md](../app_prd.md) ve geliştirme planı ile uyumlu üretim kararlarını sabitler. Plan dosyası değiştirilmez; güncellemeler burada yapılır.
+Bu belge [app_prd.md](app_prd.md) ve [plan.md](plan.md) ile uyumlu üretim kararlarını sabitler. Tasarım token’ları: [DESIGN.md](DESIGN.md).
 
 ## 1. Platform ve yığın
 
@@ -22,17 +22,28 @@ Bu belge [app_prd.md](../app_prd.md) ve geliştirme planı ile uyumlu üretim ka
 - **15 “analog” ön ayar:** Şu an **ColorMatrix + yoğunluk (0–100)** ile simüle edilir; gerçek `.cube` 3B LUT dokuları için varlık klasörü ve SkSL örnekleme sonraki iterasyonda eklenecek.
 - **Grain:** SkSL içinde prosedürel gürültü + yoğunluk üniformu; harici doku dosyası kullanılmadığı için **üçüncü parti doku lisansı gerekmez**. Üretimde film grain dokusu eklenecekse [frontend/assets/README.md](../frontend/assets/README.md) bölümündeki lisans kontrol listesi uygulanır.
 
-## 4. Gizlilik ve veri
+## 4. Backend ve LLM (bitirme / Style Triad)
 
-- **Zero-server:** Ağ çağrısı yok; KPI zaman damgaları yalnızca cihazda `FileSystem.documentDirectory` altında saklanır (isteğe bağlı silinebilir).
-- **Analitik:** Üçüncü parti SDK yok; mağaza konsolu metrikleri önerilir.
+| Katman | Seçim |
+|--------|--------|
+| API | FastAPI, `POST /api/v1/suggest-styles` |
+| LLM | Gemini 2.0 Flash (ücretsiz tier); fallback preset |
+| Deploy | Render (API) + Vercel (Expo web), $0 |
 
-## 5. Mağaza hazırlığı (özet)
+Akış: thumbnail 768px → Gemini → JSON edit reçetesi → cihazda Skia render. `GEMINI_API_KEY` yalnızca `backend/.env`.
+
+## 5. Gizlilik ve veri
+
+- **Düzenleme:** Tam çözünürlük cihazda; KPI zaman damgaları yalnızca cihazda (isteğe bağlı).
+- **Style Triad (opt-in):** Düşük çözünürlüklü önizleme Gemini’ye gider — bkz. [PRIVACY.md](PRIVACY.md).
+- **Analitik:** Üçüncü parti SDK yok.
+
+## 6. Mağaza hazırlığı (özet)
 
 - Expo `plugins` ile fotoğraf ve medya kitaplığı izin metinleri (Türkçe).
 - Gizlilik politikası taslağı: [PRIVACY.md](PRIVACY.md).
 
-## 6. Bilinen sınırlamalar (MVP)
+## 7. Bilinen sınırlamalar (MVP)
 
 - **Keskinlik (sharpness):** Skia ColorMatrix ile tam unsharp mask yok; slider arayüzde yer tutar, değer şimdilik görüntüye uygulanmayabilir veya sonraki sürümde kernel ile eklenir.
 - **EXIF tam koruma:** `saveToLibraryAsync` ile kayıt platforma bağlıdır; tüm EXIF alanlarının %100 korunması için native modül veya `expo-media-library` gelişmiş API araştırması gerekir — hedef: mümkün olan en iyi koruma + kullanıcı bilgilendirmesi.
